@@ -85,7 +85,7 @@ Sermon Transcript:
             "max_tokens": 200
         },
         "discussion_questions": {
-            "prompt": """Based on the following sermon transcript, generate 5 thought-provoking discussion questions that explore the main themes and applications of the message.
+            "prompt": """Based on the following sermon transcript, generate 5 discussion questions that would help a small group explore the main themes and applications of the message. Don't be too academic or theological. The goal is help attendees reflect on the sermon and how it could be applied to their own lives in a open-minded, accepting environment
 
 Sermon Transcript:
 {transcript}""",
