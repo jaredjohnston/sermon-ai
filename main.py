@@ -1,5 +1,7 @@
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File
+import logging
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, UploadFile, File, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
@@ -9,72 +11,33 @@ from dotenv import load_dotenv
 import uvicorn
 from urllib.parse import urlencode
 
-# Load environment variables
-print("Attempting to load .env file...")
-load_result = load_dotenv()
-print(f"Load result: {load_result}")  # Will print True if .env was found and loaded
-
-
-# Validate required environment variables
-DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-print("\n=== Checking Environment Variables ===")
-print(f"Deepgram API Key present: {'Yes' if DEEPGRAM_API_KEY else 'No'}")
-print(f"Deepgram API Key length: {len(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else 0}")
-print(f"First few characters: {DEEPGRAM_API_KEY[:4]}..." if DEEPGRAM_API_KEY else "None")
-print("======================================\n")
-
-if not DEEPGRAM_API_KEY:
-    raise ValueError("DEEPGRAM_API_KEY environment variable is required")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable is required")
-
-# Initialize OpenAI client
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
-
-# Initialize FastAPI app
-app = FastAPI(title="Sermon Content Generator API")
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Local Next.js dev
-        "https://your-vercel-app.vercel.app",  # Replace with your Vercel domain
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger(__name__)
 
-# Define allowed audio file types
-ALLOWED_AUDIO_TYPES = [
-    "audio/mpeg",
-    "audio/wav",
-    "audio/mp3",
-    "audio/x-m4a",
-    "audio/mpeg3",
-    "audio/x-mpeg-3",
-    "audio/m4a",
-]
+# Load environment variables
+logger.info("Loading environment variables...")
+load_dotenv()
 
-# Define allowed video file types
-ALLOWED_VIDEO_TYPES = [
-    "video/mp4",
-    "video/mpeg",
-    "video/webm"
-]
-
-# Define allowed media types
-ALLOWED_MEDIA_TYPES = ALLOWED_AUDIO_TYPES + ALLOWED_VIDEO_TYPES
+# Response Models
+class HealthResponse(BaseModel):
+    status: str
+    version: str = "1.0.0"
+    timestamp: str
 
 class TranscriptRequest(BaseModel):
     transcript: str
-    content_types: List[str] = ["devotional", "summary", "discussion_questions"]
+    content_types: List[str] = Field(
+        default=["devotional", "summary", "discussion_questions"],
+        description="Types of content to generate"
+    )
 
 class ContentResponse(BaseModel):
     content: Dict[str, str]
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 class TranscriptionResponse(BaseModel):
     message: str
@@ -82,69 +45,122 @@ class TranscriptionResponse(BaseModel):
     filename: str
     size: str
     content_type: str
+    processed_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
-CONTENT_TYPES = {
-    "devotional": {
-        "prompt": """Based on the following sermon transcript, create a 3-paragraph devotional that includes:
+class ErrorResponse(BaseModel):
+    detail: str
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+# Configuration
+class Config:
+    DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    MAX_FILE_SIZE = 3 * 1024 * 1024 * 1024  # 3GB
+    STREAM_THRESHOLD = 100 * 1024 * 1024     # 100MB
+    ALLOWED_AUDIO_TYPES = [
+        "audio/mpeg", "audio/wav", "audio/mp3", "audio/x-m4a",
+        "audio/mpeg3", "audio/x-mpeg-3", "audio/m4a",
+    ]
+    ALLOWED_VIDEO_TYPES = ["video/mp4", "video/mpeg", "video/webm"]
+    ALLOWED_MEDIA_TYPES = ALLOWED_AUDIO_TYPES + ALLOWED_VIDEO_TYPES
+    
+    CONTENT_TYPES = {
+        "devotional": {
+            "prompt": """Based on the following sermon transcript, create a 3-paragraph devotional that includes:
 - A relevant Bible verse
 - Three paragraphs of spiritual reflection
 - A closing prayer
 
 Sermon Transcript:
 {transcript}""",
-        "temperature": 0.7,
-        "max_tokens": 400
-    },
-    "summary": {
-        "prompt": """Based on the following sermon transcript, write a clear, concise 1-paragraph summary of the sermon's key message.
+            "temperature": 0.7,
+            "max_tokens": 400
+        },
+        "summary": {
+            "prompt": """Based on the following sermon transcript, write a clear, concise 1-paragraph summary of the sermon's key message.
 
 Sermon Transcript:
 {transcript}""",
-        "temperature": 0.5,
-        "max_tokens": 200
-    },
-    "discussion_questions": {
-        "prompt": """Based on the following sermon transcript, generate 5 thought-provoking discussion questions that explore the main themes and applications of the message.
+            "temperature": 0.5,
+            "max_tokens": 200
+        },
+        "discussion_questions": {
+            "prompt": """Based on the following sermon transcript, generate 5 thought-provoking discussion questions that explore the main themes and applications of the message.
 
 Sermon Transcript:
 {transcript}""",
-        "temperature": 0.7,
-        "max_tokens": 300
+            "temperature": 0.7,
+            "max_tokens": 300
+        }
     }
-}
 
-# File size limits
-MAX_FILE_SIZE = 3 * 1024 * 1024 * 1024  # 3GB limit
-STREAM_THRESHOLD = 100 * 1024 * 1024     # Stream files larger than 100MB
+# Validate configuration
+if not Config.DEEPGRAM_API_KEY:
+    raise ValueError("DEEPGRAM_API_KEY environment variable is required")
+if not Config.OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is required")
 
-@app.post("/transcribe")
+# Initialize clients
+openai_client = openai.OpenAI(api_key=Config.OPENAI_API_KEY)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Sermon Content Generator API",
+    description="API for transcribing sermons and generating various content types",
+    version="1.0.0"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "https://your-vercel-app.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    """Health check endpoint to verify API status"""
+    return HealthResponse(
+        status="healthy",
+        timestamp=datetime.utcnow().isoformat()
+    )
+
+@app.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe_media(file: UploadFile = File(...)):
+    """Transcribe uploaded audio/video file using Deepgram API"""
     try:
+        logger.info(f"Received transcription request for file: {file.filename}")
+        
         # Validate file type
-        if file.content_type not in ALLOWED_MEDIA_TYPES:
+        if file.content_type not in Config.ALLOWED_MEDIA_TYPES:
+            logger.warning(f"Invalid file type received: {file.content_type}")
             raise HTTPException(
-                status_code=400,
-                detail=f"File type {file.content_type} not supported. Supported types: {ALLOWED_MEDIA_TYPES}"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File type {file.content_type} not supported. Supported types: {Config.ALLOWED_MEDIA_TYPES}"
             )
         
-        # Read file content
+        # Read and validate file content
         content = await file.read()
         file_size = len(content)
         
-        # Check file size
-        if file_size > MAX_FILE_SIZE:
+        if file_size > Config.MAX_FILE_SIZE:
+            logger.warning(f"File size exceeds limit: {file_size/1024/1024:.2f}MB")
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File size ({file_size/1024/1024:.2f} MB) exceeds maximum allowed size (3 GB)"
             )
         
-        # Prepare headers for Deepgram API
+        # Prepare Deepgram request
         headers = {
-            "Authorization": f"Token {DEEPGRAM_API_KEY}",
+            "Authorization": f"Token {Config.DEEPGRAM_API_KEY}",
             "Content-Type": file.content_type
         }
         
-        # Configure Deepgram parameters
         params = {
             "smart_format": "true",
             "punctuate": "true",
@@ -153,67 +169,67 @@ async def transcribe_media(file: UploadFile = File(...)):
             "language": "en-US"
         }
         
-        print(f"\n=== Deepgram API Request ===")
-        print(f"Content Type: {file.content_type}")
-        print(f"File Size: {file_size/1024/1024:.2f} MB")
-        print("===========================\n")
+        logger.info(f"Sending request to Deepgram API for file: {file.filename}")
         
-        # Send request to Deepgram API
+        # Process transcription
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.deepgram.com/v1/listen?" + urlencode(params),
                 headers=headers,
                 content=content,
-                timeout=300  # 5 minutes timeout for larger files
+                timeout=300
             )
             
             if response.status_code != 200:
+                logger.error(f"Deepgram API error: {response.text}")
                 raise HTTPException(
-                    status_code=502,
+                    status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"Deepgram API error: {response.text}"
                 )
             
             result = response.json()
             transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
             
-            print(f"\n=== Transcription Result ===")
-            print(f"Transcript length: {len(transcript)}")
-            print(f"First 100 chars: {transcript[:100]}...")
-            print("===========================\n")
+            logger.info(f"Successfully transcribed file: {file.filename}")
             
-            return {
-                "message": "Transcription successful",
-                "transcript": transcript,
-                "filename": file.filename,
-                "size": f"{file_size/1024/1024:.2f} MB",
-                "content_type": file.content_type
-            }
+            return TranscriptionResponse(
+                message="Transcription successful",
+                transcript=transcript,
+                filename=file.filename,
+                size=f"{file_size/1024/1024:.2f} MB",
+                content_type=file.content_type
+            )
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        print(f"Transcription error: {str(e)}")
+        logger.error(f"Transcription error: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=502,
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Transcription failed: {str(e)}"
         )
 
 @app.post("/generate", response_model=ContentResponse)
 async def generate_content(request: TranscriptRequest):
-    print(f"\n=== Generate Content Request ===")
-    print(f"Transcript length: {len(request.transcript) if request.transcript else 0}")
-    print(f"First 100 chars: {request.transcript[:100]}...")
-    print(f"Content types requested: {request.content_types}")
-    print("=============================\n")
-    
+    """Generate various content types from sermon transcript"""
     try:
+        logger.info(f"Received content generation request for {len(request.content_types)} content types")
+        
         results = {}
         for content_type in request.content_types:
-            config = CONTENT_TYPES[content_type]
+            if content_type not in Config.CONTENT_TYPES:
+                logger.warning(f"Invalid content type requested: {content_type}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid content type: {content_type}"
+                )
+                
+            config = Config.CONTENT_TYPES[content_type]
             prompt = config["prompt"].format(transcript=request.transcript)
             
-            print(f"\n=== Generating {content_type} ===")
-            print(f"Prompt length: {len(prompt)}")
-
-            response = client.chat.completions.create(
+            logger.info(f"Generating {content_type} content")
+            
+            response = openai_client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a skilled religious content creator, experienced in creating various forms of spiritual content from sermon transcriptions."},
@@ -224,15 +240,16 @@ async def generate_content(request: TranscriptRequest):
             )
             
             results[content_type] = response.choices[0].message.content
-            print(f"Generated {content_type} content length: {len(results[content_type])}")
-            print("==========================\n")
+            logger.info(f"Successfully generated {content_type} content")
         
         return ContentResponse(content=results)
     
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        print(f"Content generation error: {str(e)}")
+        logger.error(f"Content generation error: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=502,
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error generating content: {str(e)}"
         )
 
