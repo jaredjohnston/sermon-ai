@@ -77,7 +77,7 @@ Sermon Transcript:
             "max_tokens": 400
         },
         "summary": {
-            "prompt": """Based on the following sermon transcript, write a clear, concise 1-paragraph summary of the sermon's key message.
+            "prompt": """Based on the following sermon transcript write two or three sentences that capture the heart of the sermon's message. Please write from the third person perspective, e.g. [Pastor's Name] brought a much-needed message on [Sermon's theme]. Use clear, pastoral language to emphasize how the message applies to discipleship and spiritual growth
 
 Sermon Transcript:
 {transcript}""",
@@ -85,7 +85,49 @@ Sermon Transcript:
             "max_tokens": 200
         },
         "discussion_questions": {
-            "prompt": """Based on the following sermon transcript, generate 5 discussion questions that would help a small group explore the main themes and applications of the message. Don't be too academic or theological. The goal is help attendees reflect on the sermon and how it could be applied to their own lives in a open-minded, accepting environment
+            "prompt": """You are a content creator for a church that produces weekly group study guides based on Sunday sermons. Please read the sermon transcript below and create a clear, structured study guide for small group leaders.
+
+            Follow this exact format:
+
+            Sunday [Date] – Group Study Guide
+            Message Title: [Title from sermon]
+            Speaker: [Speaker's name]
+            Series: [Series title, if mentioned]
+            Key Text: [Main scripture reference, ideally from the sermon]
+
+            INTRODUCTION:
+            Write 3–5 sentences summarizing the heart of the message. Highlight the theme of the sermon in a way that is theologically sound, spiritually encouraging, and accessible for group discussion. Use engaging, pastoral language that reflects the speaker’s tone.
+
+            1. [First Major Point of the Message (e.g. “Understand the PURPOSE of the Sabbath”)]
+            Write a 2–3 sentence summary explaining this point in plain, inspiring language.
+            Include 1–3 relevant scripture passages quoted in full (with references).
+            Then, write 2 discussion questions that help the group reflect on this teaching.
+
+            2. [Second Major Point (e.g. “Recognise the BARRIERS to Sabbath Rest”)]
+            Again, summarize this section of the message in 2–3 sentences.
+            Quote relevant scripture verses in full.
+            Include 2 discussion questions focused on personal application.
+
+            3. [Third Major Point (e.g. “Receive the BLESSING of the Sabbath”)]
+            List out any sub-points (like a., b., c.) clearly.
+            For each sub-point:
+
+            Write a brief explanation of the point.
+
+            Include relevant scripture.
+
+            Optional: Include 1–2 extra reflection questions at the end of this section.
+
+            CLOSING PRAYER:
+            Write a short (4–6 line) pastoral prayer that reflects the message’s heart and helps group members respond personally to what they’ve heard. Use inclusive “we” language and close in Jesus’ name.
+
+            Important Notes:
+
+            Use headings, bold text, and spacing exactly as in the sample.
+            Use uppercase / all-caps for key words in the headings.
+            Quote all Bible verses in full and cite the reference.
+            The tone should be warm, accessible, and biblically grounded.
+            Don’t invent content—only summarise or structure what’s in the transcript.
 
 Sermon Transcript:
 {transcript}""",
