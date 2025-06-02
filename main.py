@@ -4,12 +4,14 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, UploadFile, File, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import httpx
 import openai
 from dotenv import load_dotenv
 import uvicorn
 from urllib.parse import urlencode
+from enum import Enum
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -29,7 +31,8 @@ class HealthResponse(BaseModel):
     timestamp: str
 
 class TranscriptRequest(BaseModel):
-    transcript: str
+    sermon_text: str = Field(description="The sermon transcript text to generate content from")
+    admin_text: Optional[str] = Field(default=None, description="Optional admin announcements text")
     content_types: List[str] = Field(
         default=["devotional", "summary", "discussion_questions"],
         description="Types of content to generate"
@@ -51,12 +54,38 @@ class ErrorResponse(BaseModel):
     detail: str
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+class SegmentType(str, Enum):
+    WORSHIP = "worship"
+    WELCOME = "welcome"
+    SERMON = "sermon"
+    ADMIN = "admin"
+    TITHING = "tithing"
+    OTHER = "other"
+
+class Segment(BaseModel):
+    type: SegmentType
+    text: str
+    start_time: float
+    end_time: float
+    confidence: float
+
+class SegmentedTranscriptionResponse(BaseModel):
+    message: str
+    segments: List[Segment]
+    sermon_segments: List[Segment]
+    admin_segments: List[Segment]
+    filename: str
+    size: str
+    content_type: str
+    processed_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
 # Configuration
 class Config:
     DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     MAX_FILE_SIZE = 3 * 1024 * 1024 * 1024  # 3GB
     STREAM_THRESHOLD = 100 * 1024 * 1024     # 100MB
+    CHUNK_DURATION = 120  # 2 minutes in seconds
     ALLOWED_AUDIO_TYPES = [
         "audio/mpeg", "audio/wav", "audio/mp3", "audio/x-m4a",
         "audio/mpeg3", "audio/x-mpeg-3", "audio/m4a",
@@ -96,19 +125,19 @@ Sermon Transcript:
             Key Text: [Main scripture reference, ideally from the sermon]
 
             INTRODUCTION:
-            Write 3–5 sentences summarizing the heart of the message. Highlight the theme of the sermon in a way that is theologically sound, spiritually encouraging, and accessible for group discussion. Use engaging, pastoral language that reflects the speaker’s tone.
+            Write 3–5 sentences summarizing the heart of the message. Highlight the theme of the sermon in a way that is theologically sound, spiritually encouraging, and accessible for group discussion. Use engaging, pastoral language that reflects the speaker's tone.
 
-            1. [First Major Point of the Message (e.g. “Understand the PURPOSE of the Sabbath”)]
+            1. [First Major Point of the Message (e.g. "Understand the PURPOSE of the Sabbath")]
             Write a 2–3 sentence summary explaining this point in plain, inspiring language.
             Include 1–3 relevant scripture passages quoted in full (with references).
             Then, write 2 discussion questions that help the group reflect on this teaching.
 
-            2. [Second Major Point (e.g. “Recognise the BARRIERS to Sabbath Rest”)]
+            2. [Second Major Point (e.g. "Recognise the BARRIERS to Sabbath Rest")]
             Again, summarize this section of the message in 2–3 sentences.
             Quote relevant scripture verses in full.
             Include 2 discussion questions focused on personal application.
 
-            3. [Third Major Point (e.g. “Receive the BLESSING of the Sabbath”)]
+            3. [Third Major Point (e.g. "Receive the BLESSING of the Sabbath")]
             List out any sub-points (like a., b., c.) clearly.
             For each sub-point:
 
@@ -119,7 +148,7 @@ Sermon Transcript:
             Optional: Include 1–2 extra reflection questions at the end of this section.
 
             CLOSING PRAYER:
-            Write a short (4–6 line) pastoral prayer that reflects the message’s heart and helps group members respond personally to what they’ve heard. Use inclusive “we” language and close in Jesus’ name.
+            Write a short (4–6 line) pastoral prayer that reflects the message's heart and helps group members respond personally to what they've heard. Use inclusive "we" language and close in Jesus' name.
 
             Important Notes:
 
@@ -127,7 +156,7 @@ Sermon Transcript:
             Use uppercase / all-caps for key words in the headings.
             Quote all Bible verses in full and cite the reference.
             The tone should be warm, accessible, and biblically grounded.
-            Don’t invent content—only summarise or structure what’s in the transcript.
+            Don't invent content—only summarise or structure what's in the transcript.
 
 Sermon Transcript:
 {transcript}""",
@@ -135,6 +164,40 @@ Sermon Transcript:
             "max_tokens": 300
         }
     }
+
+    SEGMENT_CLASSIFIER_PROMPT = """You are an expert at analyzing church service transcripts. Your task is to classify the following segment of a church service transcript into one of these categories:
+- WORSHIP: Musical worship, songs, prayers during worship
+- WELCOME: Welcoming new visitors, announcements at the start
+- SERMON: The main sermon message, including opening/closing prayers
+- ADMIN: Church announcements, upcoming events
+- TITHING: Offering, giving, financial matters
+- OTHER: Any other segments
+
+Here are some example segments and their classifications:
+[Example 1]
+"Let's all stand and worship together. ♪ Amazing grace, how sweet the sound ♪"
+Classification: WORSHIP
+Reason: Contains worship song lyrics and worship-related instruction
+
+[Example 2]
+"Today, we're continuing our series on the Book of Romans, chapter 8. Let's pray before we dive into God's Word."
+Classification: SERMON
+Reason: Introduces the sermon topic and includes a sermon-related prayer
+
+[Example 3]
+"Don't forget to join us next Sunday for our church picnic. Sign-up sheets are in the foyer."
+Classification: ADMIN
+Reason: Contains church announcements and event information
+
+Now, please classify the following segment:
+{text}
+
+Respond in the following JSON format only:
+{
+    "type": "WORSHIP|WELCOME|SERMON|ADMIN|TITHING|OTHER",
+    "confidence": 0.0-1.0,
+    "reasoning": "Brief explanation of classification"
+}"""
 
 # Validate configuration
 if not Config.DEEPGRAM_API_KEY:
@@ -172,9 +235,9 @@ async def health_check():
         timestamp=datetime.utcnow().isoformat()
     )
 
-@app.post("/transcribe", response_model=TranscriptionResponse)
+@app.post("/transcribe", response_model=SegmentedTranscriptionResponse)
 async def transcribe_media(file: UploadFile = File(...)):
-    """Transcribe uploaded audio/video file using Deepgram API"""
+    """Transcribe uploaded audio/video file using Deepgram API and classify segments"""
     try:
         logger.info(f"Received transcription request for file: {file.filename}")
         
@@ -206,12 +269,13 @@ async def transcribe_media(file: UploadFile = File(...)):
         params = {
             "smart_format": "true",
             "punctuate": "true",
-            "diarize": "false",
+            "diarize": "true",  # Enable speaker diarization
+            "utterances": "true",  # Get utterance-level segments
             "model": "nova-2",
             "language": "en-US"
         }
         
-        logger.info(f"Sending request to Deepgram API for file: {file.filename}")
+        logger.info("Sending request to Deepgram API")
         
         # Process transcription
         async with httpx.AsyncClient() as client:
@@ -230,13 +294,93 @@ async def transcribe_media(file: UploadFile = File(...)):
                 )
             
             result = response.json()
-            transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
+            utterances = result["results"]["utterances"]
             
-            logger.info(f"Successfully transcribed file: {file.filename}")
+            # Group utterances into 2-minute chunks for efficient processing
+            chunks = []
+            current_chunk = []
+            chunk_start_time = 0
             
-            return TranscriptionResponse(
-                message="Transcription successful",
-                transcript=transcript,
+            for utterance in utterances:
+                if not current_chunk:
+                    chunk_start_time = utterance["start"]
+                    current_chunk.append(utterance)
+                elif utterance["start"] - chunk_start_time <= Config.CHUNK_DURATION:
+                    current_chunk.append(utterance)
+                else:
+                    chunks.append(current_chunk)
+                    current_chunk = [utterance]
+                    chunk_start_time = utterance["start"]
+            
+            if current_chunk:
+                chunks.append(current_chunk)
+            
+            # Classify each chunk
+            segments = []
+            for chunk in chunks:
+                chunk_text = " ".join(u["transcript"] for u in chunk)
+                chunk_start = chunk[0]["start"]
+                chunk_end = chunk[-1]["end"]
+                
+                # Classify chunk using GPT-4
+                classification_response = openai_client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You are an expert at analyzing church service transcripts."},
+                        {"role": "user", "content": Config.SEGMENT_CLASSIFIER_PROMPT.format(text=chunk_text)}
+                    ],
+                    temperature=0.3,
+                    response_format={"type": "json_object"}
+                )
+                
+                try:
+                    classification = classification_response.choices[0].message.content
+                    classification_data = json.loads(classification)
+                    
+                    segment = Segment(
+                        type=SegmentType(classification_data["type"].lower()),
+                        text=chunk_text,
+                        start_time=chunk_start,
+                        end_time=chunk_end,
+                        confidence=classification_data["confidence"]
+                    )
+                    segments.append(segment)
+                    logger.info(f"Classified segment as {segment.type} with confidence {segment.confidence}")
+                except Exception as e:
+                    logger.error(f"Error processing classification response: {str(e)}")
+                    continue
+            
+            # Extract sermon and admin segments
+            sermon_segments = [s for s in segments if s.type == SegmentType.SERMON]
+            admin_segments = [s for s in segments if s.type == SegmentType.ADMIN]
+            
+            # Merge adjacent sermon segments
+            merged_sermon_segments = []
+            current_sermon = None
+            
+            for segment in sermon_segments:
+                if not current_sermon:
+                    current_sermon = segment
+                elif segment.start_time - current_sermon.end_time <= 300:  # 5-minute gap threshold
+                    # Merge segments
+                    current_sermon.text += f" {segment.text}"
+                    current_sermon.end_time = segment.end_time
+                    current_sermon.confidence = (current_sermon.confidence + segment.confidence) / 2
+                else:
+                    merged_sermon_segments.append(current_sermon)
+                    current_sermon = segment
+            
+            if current_sermon:
+                merged_sermon_segments.append(current_sermon)
+            
+            logger.info(f"Successfully processed file: {file.filename}")
+            logger.info(f"Found {len(merged_sermon_segments)} sermon segments and {len(admin_segments)} admin segments")
+            
+            return SegmentedTranscriptionResponse(
+                message="Transcription and segmentation successful",
+                segments=segments,
+                sermon_segments=merged_sermon_segments,
+                admin_segments=admin_segments,
                 filename=file.filename,
                 size=f"{file_size/1024/1024:.2f} MB",
                 content_type=file.content_type
@@ -267,7 +411,7 @@ async def generate_content(request: TranscriptRequest):
                 )
                 
             config = Config.CONTENT_TYPES[content_type]
-            prompt = config["prompt"].format(transcript=request.transcript)
+            prompt = config["prompt"].format(transcript=request.sermon_text)
             
             logger.info(f"Generating {content_type} content")
             
