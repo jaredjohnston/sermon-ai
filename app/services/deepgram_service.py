@@ -1,5 +1,5 @@
 import logging
-from typing import BinaryIO, Dict, Any, AsyncGenerator
+from typing import BinaryIO, Dict, Any, AsyncGenerator, Union
 from deepgram import (
     DeepgramClient,
     PrerecordedOptions,
@@ -17,7 +17,7 @@ class DeepgramService:
     
     async def transcribe_file_async(
         self,
-        file: AsyncGenerator[bytes, None] | BinaryIO,
+        file: Union[AsyncGenerator[bytes, None], BinaryIO],
         mime_type: str,
         callback_url: str,
         file_size: int = None
