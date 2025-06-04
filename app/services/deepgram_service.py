@@ -1,8 +1,9 @@
 import logging
-from typing import BinaryIO, Dict, Any
+from typing import BinaryIO, Dict, Any, AsyncGenerator
 from deepgram import (
     DeepgramClient,
     PrerecordedOptions,
+    FileSource
 )
 from app.config.settings import settings
 
@@ -16,17 +17,19 @@ class DeepgramService:
     
     async def transcribe_file_async(
         self,
-        file: BinaryIO,
+        file: AsyncGenerator[bytes, None] | BinaryIO,
         mime_type: str,
-        callback_url: str
+        callback_url: str,
+        file_size: int = None
     ) -> Dict[str, Any]:
         """
-        Transcribe a file asynchronously using Deepgram
+        Transcribe a file asynchronously using Deepgram with streaming support
         
         Args:
-            file: The file to transcribe
+            file: The file to transcribe (either async generator for streaming or file object)
             mime_type: The MIME type of the file
             callback_url: URL where Deepgram should send results
+            file_size: Optional file size for better handling of large files
             
         Returns:
             Dict containing the request ID and status
@@ -41,11 +44,20 @@ class DeepgramService:
                 language="en-US"
             )
             
-            source = {
-                "buffer": file,
-                "mimetype": mime_type
-            }
+            # Handle streaming vs direct file upload
+            if isinstance(file, AsyncGenerator):
+                source = FileSource(
+                    stream=file,
+                    mimetype=mime_type,
+                    buffer_size=settings.CHUNK_SIZE
+                )
+            else:
+                source = {
+                    "buffer": file,
+                    "mimetype": mime_type
+                }
             
+            # Start async transcription
             response = await self.client.listen.rest.v("1").transcribe_file_async(
                 source=source,
                 options=options,

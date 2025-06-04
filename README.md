@@ -1,11 +1,26 @@
-# Sermon Content Generator API
+# Sermon AI
 
-This is a FastAPI-based backend application that transforms sermon audio into various forms of content using AI, including devotionals, summaries, and discussion questions.
+A FastAPI application for processing sermon videos and generating various types of content.
+
+## Features
+
+- Video transcription using Deepgram
+- Segment classification (sermon, prayer, worship, etc.)
+- Content generation:
+  - Devotionals
+  - Summaries
+  - Discussion questions
+  - "What's On" announcements
 
 ## Setup
 
-1. Clone the repository
-2. Create a virtual environment:
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/sermon_ai.git
+cd sermon_ai
+```
+
+2. Create and activate a virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -16,70 +31,83 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Create a `.env` file in the root directory with your API keys:
+4. Create a `.env` file with your API keys:
 ```
-OPENAI_API_KEY=your_openai_api_key_here
-DEEPGRAM_API_KEY=your_deepgram_api_key_here
+OPENAI_API_KEY=your_openai_key
+DEEPGRAM_API_KEY=your_deepgram_key
 ```
 
 ## Running the Application
 
 Start the FastAPI server:
 ```bash
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 ```
 
 The API will be available at `http://localhost:8000`
+- API documentation: `http://localhost:8000/docs`
+- Alternative documentation: `http://localhost:8000/redoc`
 
 ## API Endpoints
 
-### POST /transcribe
-- Transcribes audio files using Deepgram API
-- Request: `multipart/form-data`
-  - Field name: `file`
-  - Supported audio formats: MP3, WAV, etc.
-- Returns: Raw Deepgram JSON response with timestamps
+### POST /api/v1/transcribe
+Transcribe a video and classify its segments.
 
-Example curl request:
-```bash
-curl -X POST http://localhost:8000/transcribe \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@path/to/your/sermon.mp3"
-```
-
-### POST /generate
-- Generates content from sermon transcript
-- Request body:
+Request body:
 ```json
 {
-    "transcript": "Your sermon transcript text here"
-}
-```
-- Returns:
-```json
-{
-    "content": "Generated content including devotional, summary, and discussion questions"
+    "video_url": "https://example.com/video.mp4",
+    "mime_type": "video/mp4"
 }
 ```
 
-The generated content includes:
-1. A 3-paragraph devotional with:
-   - Relevant Bible verse
-   - Closing prayer
-2. A 1-paragraph summary
-3. 5 small-group discussion questions
+### POST /api/v1/generate
+Generate content from classified segments.
 
-Example curl request:
-```bash
-curl -X POST http://localhost:8000/generate \
-  -H "Content-Type: application/json" \
-  -d '{"transcript": "Your sermon transcript here"}'
+Request body:
+```json
+{
+    "segments": [
+        {
+            "type": "sermon",
+            "text": "segment text",
+            "start_time": 0.0,
+            "end_time": 60.0,
+            "confidence": 0.95
+        }
+    ],
+    "content_type": "devotional"
+}
 ```
 
-## Integration with Vercel Frontend
+## Project Structure
 
-This backend is designed to work seamlessly with a Vercel frontend. CORS is configured to allow requests from:
-- `http://localhost:3000` (local development)
-- Your Vercel deployment domain
+```
+sermon_ai/
+├── app/
+│   ├── api/
+│   │   └── endpoints.py
+│   ├── config/
+│   │   └── settings.py
+│   ├── models/
+│   │   └── schemas.py
+│   ├── services/
+│   │   ├── classifier_service.py
+│   │   ├── content_service.py
+│   │   └── transcription_service.py
+│   └── main.py
+├── requirements.txt
+└── README.md
+```
 
-Make sure to update the CORS settings in `main.py` with your actual Vercel domain. 
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details. 

@@ -1,17 +1,52 @@
 import logging
 from fastapi import APIRouter, File, UploadFile, HTTPException, Request, status
 from app.config.settings import settings
-from app.models.schemas import AsyncTranscriptionResponse, CallbackResponse
+from app.models.schemas import (
+    TranscriptionRequest,
+    TranscriptionResponse,
+    AsyncTranscriptionResponse,
+    CallbackResponse
+)
 from app.services.deepgram_service import deepgram_service
-from app.services.openai_service import openai_service
+from app.services.classifier_service import classifier_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/transcribe", response_model=AsyncTranscriptionResponse)
-async def transcribe_media(file: UploadFile = File(...)):
+@router.post("/", response_model=TranscriptionResponse)
+async def transcribe_video(request: TranscriptionRequest):
     """
-    Transcribe uploaded audio/video file using Deepgram API
+    Transcribe a video from URL and classify its segments
+    """
+    try:
+        logger.info(f"Received transcription request for URL: {request.video_url}")
+        
+        # Get transcription from Deepgram
+        result = await deepgram_service.transcribe_file_async(
+            request.video_url,
+            request.mime_type,
+            settings.CALLBACK_URL
+        )
+        
+        return TranscriptionResponse(
+            request_id=result["request_id"],
+            status="processing",
+            metadata={
+                "video_url": request.video_url
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Transcription error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Transcription failed: {str(e)}"
+        )
+
+@router.post("/upload", response_model=AsyncTranscriptionResponse)
+async def transcribe_upload(file: UploadFile = File(...)):
+    """
+    Transcribe uploaded audio/video file using Deepgram API with streaming support
     """
     try:
         logger.info(f"Received transcription request for file: {file.filename}")
@@ -36,14 +71,17 @@ async def transcribe_media(file: UploadFile = File(...)):
                 detail=f"File size ({file_size/1024/1024:.2f} MB) exceeds maximum allowed size (4 GB)"
             )
         
-        # Your callback URL where Deepgram will send results
-        callback_url = "https://your-domain.com/api/v1/transcribe/callback"
+        # Create async generator for streaming file content
+        async def file_stream():
+            while chunk := await file.read(settings.CHUNK_SIZE):
+                yield chunk
         
-        # Start async transcription
+        # Start async transcription with streaming
         result = await deepgram_service.transcribe_file_async(
-            file=file.file,
+            file=file_stream(),
             mime_type=file.content_type,
-            callback_url=callback_url
+            callback_url=settings.CALLBACK_URL,
+            file_size=file_size  # Pass file size for better handling
         )
         
         logger.info(f"Async transcription request accepted. Request ID: {result['request_id']}")
@@ -51,7 +89,7 @@ async def transcribe_media(file: UploadFile = File(...)):
         return AsyncTranscriptionResponse(
             message="Transcription started successfully",
             request_id=result["request_id"],
-            callback_url=callback_url,
+            callback_url=settings.CALLBACK_URL,
             filename=file.filename,
             size=f"{file_size/1024/1024:.2f} MB",
             content_type=file.content_type
@@ -66,7 +104,7 @@ async def transcribe_media(file: UploadFile = File(...)):
             detail=f"Transcription failed: {str(e)}"
         )
 
-@router.post("/transcribe/callback", response_model=CallbackResponse)
+@router.post("/callback", response_model=CallbackResponse)
 async def deepgram_callback(request: Request):
     """
     Handle callbacks from Deepgram with transcription results
@@ -91,10 +129,12 @@ async def deepgram_callback(request: Request):
         # Process the results
         utterances = results["utterances"]
         
+        # Classify the segments
+        segments = await classifier_service.classify_segments(utterances)
+        
         # Here you would typically:
         # 1. Store the results in a database
         # 2. Notify any waiting clients
-        # 3. Trigger any post-processing
         
         return CallbackResponse(
             status="success",

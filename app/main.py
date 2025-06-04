@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.router import router
+from app.api.endpoints import router as api_router
 from app.config.settings import settings
 
 # Configure logging
@@ -16,23 +16,33 @@ def create_application() -> FastAPI:
     
     # Create FastAPI app
     app = FastAPI(
-        title=settings.PROJECT_NAME,
-        description="API for transcribing sermons and generating various content types",
-        version=settings.VERSION,
+        title="Sermon AI",
+        description="API for processing and generating content from sermon videos",
+        version="1.0.0"
     )
     
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=["*"],  # In production, replace with specific origins
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     
-    # Include API router
-    app.include_router(router)
+    # Include API routes
+    app.include_router(api_router, prefix="/api/v1")
     
     return app
 
-app = create_application() 
+app = create_application()
+
+@app.get("/")
+async def root():
+    """Root endpoint returning API information"""
+    return {
+        "name": "Sermon AI API",
+        "version": "1.0.0",
+        "status": "active",
+        "documentation": "/docs"
+    } 
