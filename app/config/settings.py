@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1024 * 1024  # 1MB chunks for streaming
     UPLOAD_TIMEOUT: int = 600  # 10 minutes
     
+    # Callback Settings
+    CALLBACK_URL: str = os.getenv("CALLBACK_URL", "http://localhost:8000/api/v1/transcription/callback")
+    
     # Media Types
     ALLOWED_AUDIO_TYPES: List[str] = [
         "audio/mpeg", "audio/wav", "audio/mp3", "audio/x-m4a",
