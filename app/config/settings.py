@@ -173,6 +173,10 @@ class Settings(BaseSettings):
         }
     }
 
+    # Supabase Settings
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://fapjxekuyckurahbtvrt.supabase.co")
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "***REMOVED***")  # Use anon/public key here
+
     class Config:
         env_file = ".env"
         case_sensitive = True

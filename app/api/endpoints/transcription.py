@@ -1,52 +1,17 @@
 import logging
-from fastapi import APIRouter, File, UploadFile, HTTPException, Request, status
+from fastapi import APIRouter, File, UploadFile, HTTPException, status, Request
 from app.config.settings import settings
-from app.models.schemas import (
-    TranscriptionRequest,
-    TranscriptionResponse,
-    AsyncTranscriptionResponse,
-    CallbackResponse
-)
 from app.services.deepgram_service import deepgram_service
-from app.services.classifier_service import classifier_service
+from datetime import datetime
+import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/", response_model=TranscriptionResponse)
-async def transcribe_video(request: TranscriptionRequest):
-    """
-    Transcribe a video from URL and classify its segments
-    """
-    try:
-        logger.info(f"Received transcription request for URL: {request.video_url}")
-        
-        # Get transcription from Deepgram
-        result = await deepgram_service.transcribe_file_async(
-            request.video_url,
-            request.mime_type,
-            settings.CALLBACK_URL
-        )
-        
-        return TranscriptionResponse(
-            request_id=result["request_id"],
-            status="processing",
-            metadata={
-                "video_url": request.video_url
-            }
-        )
-        
-    except Exception as e:
-        logger.error(f"Transcription error: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Transcription failed: {str(e)}"
-        )
-
-@router.post("/upload", response_model=AsyncTranscriptionResponse)
+@router.post("/upload")
 async def transcribe_upload(file: UploadFile = File(...)):
     """
-    Transcribe uploaded audio/video file using Deepgram API with streaming support
+    Transcribe uploaded audio/video file using Deepgram API
     """
     try:
         logger.info(f"Received transcription request for file: {file.filename}")
@@ -71,30 +36,23 @@ async def transcribe_upload(file: UploadFile = File(...)):
                 detail=f"File size ({file_size/1024/1024:.2f} MB) exceeds maximum allowed size (4 GB)"
             )
         
-        # Create async generator for streaming file content
-        async def file_stream():
-            while chunk := await file.read(settings.CHUNK_SIZE):
-                yield chunk
-        
-        # Start async transcription with streaming
-        result = await deepgram_service.transcribe_file_async(
-            file=file_stream(),
-            mime_type=file.content_type,
-            callback_url=settings.CALLBACK_URL,
-            file_size=file_size  # Pass file size for better handling
-        )
-        
-        logger.info(f"Async transcription request accepted. Request ID: {result['request_id']}")
-        
-        return AsyncTranscriptionResponse(
-            message="Transcription started successfully",
-            request_id=result["request_id"],
-            callback_url=settings.CALLBACK_URL,
-            filename=file.filename,
-            size=f"{file_size/1024/1024:.2f} MB",
-            content_type=file.content_type
-        )
-        
+        try:
+            # Reset file position after size check
+            file.file.seek(0)
+            
+            # Get transcription with original content type
+            result = await deepgram_service.transcribe_file(
+                file=file.file,
+                content_type=file.content_type
+            )
+            
+            return result
+            
+        except Exception as e:
+            # Make sure to reset file position if transcription fails
+            file.file.seek(0)
+            raise e
+            
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -104,47 +62,51 @@ async def transcribe_upload(file: UploadFile = File(...)):
             detail=f"Transcription failed: {str(e)}"
         )
 
-@router.post("/callback", response_model=CallbackResponse)
-async def deepgram_callback(request: Request):
+@router.post("/callback")
+async def transcription_callback(request: Request):
     """
-    Handle callbacks from Deepgram with transcription results
+    Callback endpoint for Deepgram transcription results
     """
     try:
-        # Get the callback data
-        callback_data = await request.json()
+        # Get the raw JSON data from the request
+        data = await request.json()
         
-        # Extract the transcription results
-        results = callback_data.get("results", {})
-        request_id = callback_data.get("request_id")
+        # Extract and log the transcript details
+        if 'results' in data and 'channels' in data['results']:
+            for i, channel in enumerate(data['results']['channels']):
+                logger.info(f"\nChannel {i + 1} Transcript Details:")
+                if 'alternatives' in channel:
+                    for j, alt in enumerate(channel['alternatives']):
+                        logger.info(f"\nAlternative {j + 1}:")
+                        logger.info(f"Full Transcript: {alt.get('transcript', 'No transcript available')}")
+                        logger.info(f"Confidence: {alt.get('confidence', 'No confidence score')}")
+                        
+                        # Log individual utterances if available
+                        if 'utterances' in alt:
+                            logger.info("\nUtterances:")
+                            for k, utterance in enumerate(alt['utterances']):
+                                logger.info(f"\nUtterance {k + 1}:")
+                                logger.info(f"Speaker: {utterance.get('speaker', 'Unknown')}")
+                                logger.info(f"Start: {utterance.get('start', 'N/A')}s")
+                                logger.info(f"End: {utterance.get('end', 'N/A')}s")
+                                logger.info(f"Text: {utterance.get('transcript', 'No text')}")
+                                logger.info(f"Confidence: {utterance.get('confidence', 'No confidence')}")
+        else:
+            logger.warning("No transcript data found in callback payload")
+            
+        # Log the complete raw data for debugging
+        logger.info("\nComplete callback data:")
+        logger.info(json.dumps(data, indent=2))
         
-        logger.info(f"Received callback for request ID: {request_id}")
-        
-        if not results or "utterances" not in results:
-            logger.error("Unexpected callback format from Deepgram")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid callback data format"
-            )
-        
-        # Process the results
-        utterances = results["utterances"]
-        
-        # Classify the segments
-        segments = await classifier_service.classify_segments(utterances)
-        
-        # Here you would typically:
-        # 1. Store the results in a database
-        # 2. Notify any waiting clients
-        
-        return CallbackResponse(
-            status="success",
-            message="Callback processed successfully",
-            request_id=request_id
-        )
-        
+        return {
+            "status": "success",
+            "message": "Callback received and processed",
+            "processed_at": datetime.utcnow().isoformat()
+        }
+            
     except Exception as e:
-        logger.error(f"Error processing callback: {str(e)}")
+        logger.error(f"Error processing Deepgram callback: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing callback: {str(e)}"
-        ) 
+            detail=f"Failed to process callback: {str(e)}"
+        )
