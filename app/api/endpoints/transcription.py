@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, File, UploadFile, HTTPException, status, Request
 from app.config.settings import settings
 from app.services.deepgram_service import deepgram_service
-from datetime import datetime
+from datetime import datetime, UTC
 import json
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ async def transcription_callback(request: Request):
         return {
             "status": "success",
             "message": "Callback received and processed",
-            "processed_at": datetime.utcnow().isoformat()
+            "processed_at": datetime.now(UTC).isoformat()
         }
             
     except Exception as e:
