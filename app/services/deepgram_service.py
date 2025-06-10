@@ -85,15 +85,24 @@ class DeepgramService:
             filename = f"transcription_{asyncio.get_event_loop().time()}.mp4"
             logger.info(f"Attempting to upload file to Supabase with filename: {filename}")
             
+            # Get current position to restore later
+            current_pos = file.tell()
+            # Reset to start of file
+            file.seek(0)
+            # Read file content
+            file_content = file.read()
+            # Reset file position
+            file.seek(current_pos)
+            
             # Upload file to 'videos-test' bucket with explicit content type
             logger.info("Starting file upload to Supabase 'videos-test' bucket...")
             response = self.supabase.storage \
                 .from_('videos-test') \
                 .upload(
-                    filename,  # path
-                    file,     # file
+                    filename,      # path
+                    file_content,  # file content as bytes
                     file_options={
-                        "content-type": "video/mp4"  # Explicitly set for MP4 files
+                        "content-type": content_type  # Use passed content type
                     }
                 )
             logger.info(f"File upload response from Supabase: {response}")
