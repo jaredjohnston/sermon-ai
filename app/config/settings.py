@@ -175,7 +175,15 @@ class Settings(BaseSettings):
 
     # Supabase Settings
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://fapjxekuyckurahbtvrt.supabase.co")
-    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "***REMOVED***")  # Use anon/public key here
+    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "***REMOVED***")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "***REMOVED***")
+    # Storage Settings
+    STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "videos")
+    STORAGE_PATH_PREFIX: str = "clients"  # Base path for all client files
+    
+    # Admin/Testing Settings
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "jared.johnston@me.com")  # Change this to your email
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")  # development, staging, production
 
     model_config = {
         "env_file": ".env",

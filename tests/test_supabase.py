@@ -35,11 +35,11 @@ async def test_supabase_upload(mock_supabase_client, test_file):
     # Get the mock storage object
     mock_storage = mock_supabase_client.storage.from_.return_value
     
-    # Verify from_ was called twice with 'videos-test'
+    # Verify from_ was called twice with 'videos'
     assert mock_supabase_client.storage.from_.call_count == 2
     mock_supabase_client.storage.from_.assert_has_calls([
-        call('videos-test'),
-        call('videos-test')
+        call('videos'),
+        call('videos')
     ], any_order=True)
     
     # Verify upload was called once

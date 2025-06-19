@@ -18,10 +18,10 @@ class DeepgramService:
         # Initialize Deepgram client
         self.client = DeepgramClient(settings.DEEPGRAM_API_KEY)
         
-        # Initialize Supabase client
+        # Initialize Supabase client with service role for database operations
         self.supabase: Client = create_client(
             settings.SUPABASE_URL,
-            settings.SUPABASE_KEY
+            settings.SUPABASE_SERVICE_ROLE_KEY
         )
         
     def _validate_audio(self, file: BinaryIO) -> bool:
@@ -78,12 +78,10 @@ class DeepgramService:
             logger.error(f"Unexpected error while validating audio: {str(e)}")
             raise
         
-    async def upload_to_supabase(self, file: BinaryIO, content_type: str) -> str:
+    async def upload_to_supabase(self, file: BinaryIO, content_type: str, storage_path: str) -> str:
         """Upload file to Supabase Storage and get signed URL"""
         try:
-            # Create a unique filename
-            filename = f"transcription_{asyncio.get_event_loop().time()}.mp4"
-            logger.info(f"Attempting to upload file to Supabase with filename: {filename}")
+            logger.info(f"Attempting to upload file to Supabase at path: {storage_path}")
             
             # Get current position to restore later
             current_pos = file.tell()
@@ -94,12 +92,12 @@ class DeepgramService:
             # Reset file position
             file.seek(current_pos)
             
-            # Upload file to 'videos-test' bucket with explicit content type
-            logger.info("Starting file upload to Supabase 'videos-test' bucket...")
+            # Upload file to configured bucket with explicit content type
+            logger.info(f"Starting file upload to Supabase '{settings.STORAGE_BUCKET}' bucket...")
             response = self.supabase.storage \
-                .from_('videos-test') \
+                .from_(settings.STORAGE_BUCKET) \
                 .upload(
-                    filename,      # path
+                    storage_path,  # Use the full storage path
                     file_content,  # file content as bytes
                     file_options={
                         "content-type": content_type  # Use passed content type
@@ -109,8 +107,8 @@ class DeepgramService:
             
             # Get signed URL with token
             signed_url_response = self.supabase.storage \
-                .from_('videos-test') \
-                .create_signed_url(filename, 60 * 60 * 24)  # 24 hour expiry
+                .from_(settings.STORAGE_BUCKET) \
+                .create_signed_url(storage_path, 60 * 60 * 24)  # 24 hour expiry
             
             # Extract the signed URL with token
             signed_url = signed_url_response['signedURL']
@@ -122,33 +120,22 @@ class DeepgramService:
             logger.error(f"Error uploading to Supabase: {str(e)}", exc_info=True)
             raise
 
-    async def transcribe_file(self, file: BinaryIO, content_type: str = None) -> Dict[str, Any]:
+    async def transcribe_from_url(self, signed_url: str) -> Dict[str, Any]:
         """
-        Transcribe a file by first uploading to Supabase Storage,
-        then using the public URL with Deepgram's prerecorded API
+        Transcribe a file from a signed URL using Deepgram's prerecorded API
 
         Args:
-            file: File-like object containing the audio/video
-            content_type: The content type of the file (e.g. video/mp4)
+            signed_url: Signed URL of the audio/video file to transcribe (e.g. from Supabase)
             
         Returns:
             Dict containing:
                 - request_id: Deepgram's request ID for tracking
                 - callback_url: The URL where results will be sent
                 - status: Current status (always "processing" initially)
-            
-        Raises:
-            ValueError: If file contains no audio streams
         """
-        # Validate audio before proceeding
-        if not self._validate_audio(file):
-            raise ValueError("File contains no audio streams. Cannot transcribe.")
-        
         try:
-            # Upload to Supabase and get public URL
-            source_url = await self.upload_to_supabase(file, content_type or "video/mp4")
             
-            # Configure transcription options
+# Configure transcription options
             options = PrerecordedOptions(
                 model="nova-3",
                 smart_format=True,
@@ -157,15 +144,15 @@ class DeepgramService:
                 callback=settings.CALLBACK_URL
             )
 
-            # Start the transcription job using the URL
+            # Start the transcription job using the signed URL
             logger.info(f"Callback URL configured as: {settings.CALLBACK_URL}")
             logger.info(f"Transcription options: {options}")
-            logger.info(f"Source URL: {source_url}")
+            logger.info(f"Signed URL: {signed_url}")
             
             try:
                 # Call Deepgram API using asyncrest namespace (matching test file)
                 response = await self.client.listen.asyncrest.v("1").transcribe_url(
-                    {"url": source_url},  # Pass as dict with 'url' key
+                    {"url": signed_url},  # Pass signed URL as dict with 'url' key
                     options=options
                 )
                 
@@ -190,6 +177,39 @@ class DeepgramService:
 
         except Exception as e:
             logger.error(f"Error in Deepgram transcription: {e}")
+            raise
+
+    async def transcribe_file(self, file: BinaryIO, content_type: str = None, storage_path: str = None) -> Dict[str, Any]:
+        """
+        Transcribe a file by first uploading to Supabase Storage,
+        then using the public URL with Deepgram's prerecorded API
+        
+        NOTE: File should already be validated before calling this method.
+        Use ValidationService.validate_complete_for_transcription() first.
+
+        Args:
+            file: File-like object containing the audio/video (already validated)
+            content_type: The content type of the file (e.g. video/mp4) 
+            storage_path: Path where file should be stored (optional, generates default if not provided)
+            
+        Returns:
+            Dict containing:
+                - request_id: Deepgram's request ID for tracking
+                - callback_url: The URL where results will be sent
+                - status: Current status (always "processing" initially)
+        """
+        try:
+            # Use provided storage_path or generate a default one
+            path = storage_path or f"transcription_{asyncio.get_event_loop().time()}.mp4"
+            
+            # Upload to Supabase and get signed URL
+            supabase_signed_url = await self.upload_to_supabase(file, content_type or "video/mp4", path)
+            
+            # Use the transcribe_from_url method
+            return await self.transcribe_from_url(supabase_signed_url)
+            
+        except Exception as e:
+            logger.error(f"Error in file transcription: {e}")
             raise
 
 # Export a singleton instance

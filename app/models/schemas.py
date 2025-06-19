@@ -1,8 +1,9 @@
 from datetime import datetime
 from enum import Enum
 from typing import List, Dict, Optional, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 import uuid
+from uuid import UUID
 
 class HealthResponse(BaseModel):
     """Health check response model"""
@@ -82,4 +83,202 @@ class CallbackResponse(BaseModel):
     status: str
     message: str
     request_id: str
-    processed_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat()) 
+    processed_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+class UserBase(BaseModel):
+    """Base user model"""
+    email: str
+
+class UserCreate(UserBase):
+    """User creation model with extended fields"""
+    password: str
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
+    country: str = Field(..., min_length=2, max_length=100)
+    organization_name: str = Field(..., min_length=2, max_length=100)  # This becomes the client name
+
+class User(UserBase):
+    """User model with ID"""
+    id: UUID
+    created_at: datetime
+
+class UserProfileBase(BaseModel):
+    """Base user profile model"""
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
+    country: str = Field(..., min_length=2, max_length=100)
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+class UserProfileCreate(UserProfileBase):
+    """User profile creation model"""
+    pass
+
+class UserProfile(UserProfileBase):
+    """User profile model with ID and timestamps"""
+    id: UUID
+    user_id: UUID
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+class UserWithProfile(User):
+    """User model with profile information"""
+    profile: Optional[UserProfile] = None
+
+class TeamBase(BaseModel):
+    """Base team model"""
+    name: str
+
+class TeamCreate(TeamBase):
+    """Team creation model"""
+    pass
+
+class Team(TeamBase):
+    """Team model with ID and timestamps"""
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+class TeamMemberBase(BaseModel):
+    """Base team member model"""
+    team_id: UUID
+    role: str = "member"
+
+class TeamMemberCreate(TeamMemberBase):
+    """Team member creation model"""
+    pass
+
+class TeamMember(TeamMemberBase):
+    """Team member model with user ID"""
+    user_id: UUID
+    created_at: datetime
+
+class VideoBase(BaseModel):
+    """Base video model"""
+    filename: str = Field(..., min_length=1, max_length=255)
+    content_type: str = Field(..., pattern=r'^(video|audio)/[\w-]+$')
+    size_bytes: int = Field(..., gt=0)
+    client_id: UUID
+    storage_path: str = Field(..., min_length=1, max_length=512)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class VideoCreate(VideoBase):
+    """Video creation model"""
+    pass
+
+class Video(VideoBase):
+    """Video model with ID and timestamps"""
+    id: UUID
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+class SubscriptionStatus(str, Enum):
+    """Client subscription status"""
+    active = "active"
+    inactive = "inactive"
+    trial = "trial"
+
+class TranscriptStatus(str, Enum):
+    """Status of a transcript"""
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+    pending = "pending"
+
+class TranscriptBase(BaseModel):
+    """Base transcript model"""
+    video_id: UUID
+    client_id: UUID
+    status: TranscriptStatus = Field(default=TranscriptStatus.processing)
+    raw_transcript: Optional[Dict[str, Any]] = None
+    processed_transcript: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    request_id: Optional[str] = None
+
+class TranscriptCreate(TranscriptBase):
+    """Request to create a transcript"""
+    pass
+
+class Transcript(TranscriptBase):
+    """Transcript model with ID and timestamps"""
+    id: UUID
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+# Response models
+class TeamResponse(Team):
+    """Team response model with members"""
+    members: List[TeamMember] = []
+
+class VideoResponse(Video):
+    """Video response model with transcript"""
+    transcript: Optional[Transcript] = None
+
+class UserRole(str, Enum):
+    """User roles in a client"""
+    owner = "owner"
+    member = "member"
+
+class ClientBase(BaseModel):
+    """Base client model"""
+    name: str = Field(..., min_length=2, max_length=100)
+    subscription_status: SubscriptionStatus = Field(default=SubscriptionStatus.trial)
+
+class ClientCreate(ClientBase):
+    """Client creation model"""
+    pass
+
+class Client(ClientBase):
+    """Client model with ID and timestamps"""
+    id: UUID
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+class ClientUserBase(BaseModel):
+    """Base client user model"""
+    client_id: UUID
+    user_id: UUID
+    role: UserRole = Field(default=UserRole.member)
+
+class ClientUserCreate(ClientUserBase):
+    """Client user creation model"""
+    email: EmailStr  # Used for invitation but not stored in DB
+
+class ClientUser(ClientUserBase):
+    """Client user model with timestamps"""
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+class ClientResponse(Client):
+    """Client response with users"""
+    users: List[ClientUser] = []
+
+class SignUpResponse(BaseModel):
+    """Enhanced signup response with user, profile, and client"""
+    user: User
+    profile: UserProfile
+    client: Client
+    role: UserRole = UserRole.owner
+    access_token: str
+    token_type: str = "bearer" 
