@@ -14,6 +14,7 @@ from app.models.schemas import (
     ClientUser, ClientUserCreate
 )
 import uuid
+import logging
 
 
 # Custom exceptions for better error handling
@@ -43,6 +44,7 @@ class SupabaseService:
     def __init__(self):
         self._anon_client: Optional[AsyncClient] = None
         self._service_client: Optional[AsyncClient] = None
+        self.logger = logging.getLogger(__name__)
     
     async def _get_anon_client(self) -> AsyncClient:
         """Get or create async Supabase client with anon key (for auth operations)"""
@@ -70,18 +72,51 @@ class SupabaseService:
         """Helper method to convert UUID to string consistently"""
         return str(uuid_value)
     
+    def _validate_uuid(self, uuid_value: UUID, field_name: str = "UUID") -> UUID:
+        """Validate UUID input and raise appropriate error if invalid"""
+        if not uuid_value:
+            raise ValidationError(f"{field_name} cannot be None")
+        if not isinstance(uuid_value, UUID):
+            raise ValidationError(f"Invalid {field_name}: must be a valid UUID")
+        return uuid_value
+    
+    def _validate_email(self, email: str) -> str:
+        """Basic email validation"""
+        if not email or not email.strip():
+            raise ValidationError("Email cannot be empty")
+        if "@" not in email or "." not in email:
+            raise ValidationError("Invalid email format")
+        return email.strip().lower()
+    
+    def _validate_string(self, value: str, field_name: str, min_length: int = 1, max_length: int = 255) -> str:
+        """Validate string input with length constraints"""
+        if not value or not value.strip():
+            raise ValidationError(f"{field_name} cannot be empty")
+        if len(value.strip()) < min_length:
+            raise ValidationError(f"{field_name} must be at least {min_length} characters")
+        if len(value.strip()) > max_length:
+            raise ValidationError(f"{field_name} cannot exceed {max_length} characters")
+        return value.strip()
+    
     # Auth methods
     async def sign_up(self, user: UserCreate) -> User:
         """Register a new user"""
         try:
+            # Validate input
+            email = self._validate_email(user.email)
+            if not user.password or len(user.password) < 8:
+                raise ValidationError("Password must be at least 8 characters")
+            
             client = await self._get_anon_client()
             response = await client.auth.sign_up({
-                "email": user.email,
+                "email": email,
                 "password": user.password
             })
             return User(**response.user.dict())
+        except (ValidationError, AuthenticationError):
+            raise
         except Exception as e:
-            raise AuthenticationError(f"Failed to sign up user: {str(e)}")
+            raise AuthenticationError(f"Failed to sign up user: {str(e)}") from e
     
     async def sign_in(self, email: str, password: str) -> Dict[str, Any]:
         """Sign in a user"""
@@ -96,7 +131,7 @@ class SupabaseService:
                 "session": response.session
             }
         except Exception as e:
-            raise Exception(f"Failed to sign in: {str(e)}")
+            raise AuthenticationError(f"Failed to sign in: {str(e)}") from e
     
     async def complete_profile(self, profile_data: UserProfileCreate, session) -> UserProfile:
         """Complete user profile using authenticated session - standard Supabase pattern"""
@@ -121,7 +156,7 @@ class SupabaseService:
             
             return UserProfile(**response.data[0])
         except Exception as e:
-            raise Exception(f"Failed to complete profile: {str(e)}")
+            raise DatabaseError(f"Failed to complete profile: {str(e)}") from e
     
     async def create_organization(self, org_name: str, session) -> Client:
         """Create organization using authenticated session - standard Supabase pattern"""
@@ -149,7 +184,7 @@ class SupabaseService:
             
             return org
         except Exception as e:
-            raise Exception(f"Failed to create organization: {str(e)}")
+            raise DatabaseError(f"Failed to create organization: {str(e)}") from e
     
     async def get_user(self, user_id: UUID) -> Optional[User]:
         """Get user details"""
@@ -158,7 +193,7 @@ class SupabaseService:
             response = await client.auth.admin.get_user_by_id(str(user_id))
             return User(**response.user.dict()) if response.user else None
         except Exception as e:
-            raise Exception(f"Failed to get user: {str(e)}")
+            raise DatabaseError(f"Failed to get user: {str(e)}") from e
     
     # User Profile methods
     async def create_user_profile(self, profile: UserProfileCreate, user_id: UUID) -> UserProfile:
@@ -178,11 +213,11 @@ class SupabaseService:
             }).execute()
             
             if not response.data:
-                raise Exception("Failed to create user profile - no data returned")
+                raise DatabaseError("Failed to create user profile - no data returned")
                 
             return UserProfile(**response.data[0])
         except Exception as e:
-            raise Exception(f"Failed to create user profile: {str(e)}")
+            raise DatabaseError(f"Failed to create user profile: {str(e)}") from e
     
     async def get_user_profile(self, user_id: UUID) -> Optional[UserProfile]:
         """Get user profile by user_id"""
@@ -196,7 +231,7 @@ class SupabaseService:
                 .execute()
             return UserProfile(**response.data) if response.data else None
         except Exception as e:
-            raise Exception(f"Failed to get user profile: {str(e)}")
+            raise DatabaseError(f"Failed to get user profile: {str(e)}") from e
     
     async def update_user_profile(self, user_id: UUID, updates: Dict[str, Any]) -> UserProfile:
         """Update user profile"""
@@ -211,7 +246,7 @@ class SupabaseService:
                 .execute()
             return UserProfile(**response.data[0])
         except Exception as e:
-            raise Exception(f"Failed to update user profile: {str(e)}")
+            raise DatabaseError(f"Failed to update user profile: {str(e)}") from e
     
     # Team methods
     async def create_team(self, team: TeamCreate, user_id: UUID) -> Team:
@@ -233,7 +268,7 @@ class SupabaseService:
             
             return Team(**team_data)
         except Exception as e:
-            raise Exception(f"Failed to create team: {str(e)}")
+            raise DatabaseError(f"Failed to create team: {str(e)}") from e
     
     async def get_user_teams(self, user_id: UUID) -> List[Team]:
         """Get teams for a user"""
@@ -247,7 +282,7 @@ class SupabaseService:
                 .execute()
             return [Team(**team) for team in response.data]
         except Exception as e:
-            raise Exception(f"Failed to get user teams: {str(e)}")
+            raise DatabaseError(f"Failed to get user teams: {str(e)}") from e
     
     # Video methods
     async def create_video(self, video: VideoCreate, user_id: UUID) -> Video:
@@ -267,7 +302,7 @@ class SupabaseService:
             }).execute()
             return Video(**response.data[0])
         except Exception as e:
-            raise Exception(f"Failed to create video: {str(e)}")
+            raise DatabaseError(f"Failed to create video: {str(e)}") from e
     
     async def get_user_videos(self, user_id: UUID) -> List[Video]:
         """Get videos for a user"""
@@ -279,7 +314,7 @@ class SupabaseService:
                 .execute()
             return [Video(**video) for video in response.data]
         except Exception as e:
-            raise Exception(f"Failed to get user videos: {str(e)}")
+            raise DatabaseError(f"Failed to get user videos: {str(e)}") from e
     
     # Transcript methods
     async def create_transcript(self, transcript: TranscriptCreate, user_id: UUID) -> Transcript:
@@ -300,7 +335,7 @@ class SupabaseService:
             }).execute()
             return Transcript(**response.data[0])
         except Exception as e:
-            raise Exception(f"Failed to create transcript: {str(e)}")
+            raise DatabaseError(f"Failed to create transcript: {str(e)}") from e
     
     async def update_transcript(self, transcript_id: UUID, updates: Dict[str, Any], user_id: UUID) -> Transcript:
         """Update a transcript"""
@@ -319,7 +354,7 @@ class SupabaseService:
                 .execute()
             return Transcript(**response.data[0])
         except Exception as e:
-            raise Exception(f"Failed to update transcript: {str(e)}")
+            raise DatabaseError(f"Failed to update transcript: {str(e)}") from e
 
     async def get_transcript_by_request_id(self, request_id: str) -> Optional[Transcript]:
         """Get a transcript by its Deepgram request ID"""
@@ -333,7 +368,7 @@ class SupabaseService:
                 .execute()
             return Transcript(**response.data) if response.data else None
         except Exception as e:
-            raise Exception(f"Failed to get transcript by request_id: {str(e)}")
+            raise DatabaseError(f"Failed to get transcript by request_id: {str(e)}") from e
 
     async def get_client_transcripts(self, client_id: UUID) -> List[Transcript]:
         """Get all transcripts for a client"""
@@ -346,7 +381,7 @@ class SupabaseService:
                 .execute()
             return [Transcript(**transcript) for transcript in response.data]
         except Exception as e:
-            raise Exception(f"Failed to get client transcripts: {str(e)}")
+            raise DatabaseError(f"Failed to get client transcripts: {str(e)}") from e
 
     async def get_transcript(self, transcript_id: UUID) -> Optional[Transcript]:
         """Get a single transcript by ID"""
@@ -356,11 +391,11 @@ class SupabaseService:
                 .select("*")\
                 .eq("id", self._uuid_str(transcript_id))\
                 .is_("deleted_at", "null")\
-                .single()\
+                .maybe_single()\
                 .execute()
-            return Transcript(**response.data) if response.data else None
+            return Transcript(**response.data) if response and response.data else None
         except Exception as e:
-            raise DatabaseError(f"Failed to get transcript: {str(e)}")
+            raise DatabaseError(f"Failed to get transcript: {str(e)}") from e
 
     async def get_user_transcripts(self, user_id: UUID) -> List[Transcript]:
         """Get all transcripts for a user (filtered by their client)"""
@@ -374,7 +409,7 @@ class SupabaseService:
                 .execute()
             return [Transcript(**transcript) for transcript in response.data]
         except Exception as e:
-            raise Exception(f"Failed to get user transcripts: {str(e)}")
+            raise DatabaseError(f"Failed to get user transcripts: {str(e)}") from e
 
     async def get_video_transcript(self, video_id: UUID) -> Optional[Transcript]:
         """Get the transcript for a specific video"""
@@ -382,13 +417,13 @@ class SupabaseService:
             client = await self._get_client()
             response = await client.table('transcripts')\
                 .select("*")\
-                .eq("video_id", str(video_id))\
+                .eq("video_id", self._uuid_str(video_id))\
                 .is_("deleted_at", "null")\
-                .single()\
+                .maybe_single()\
                 .execute()
-            return Transcript(**response.data) if response.data else None
+            return Transcript(**response.data) if response and response.data else None
         except Exception as e:
-            raise Exception(f"Failed to get video transcript: {str(e)}")
+            raise DatabaseError(f"Failed to get video transcript: {str(e)}") from e
 
     async def get_transcript_with_video(self, transcript_id: UUID) -> Optional[Dict[str, Any]]:
         """Get transcript with related video information (JOIN query)"""
@@ -396,13 +431,13 @@ class SupabaseService:
             client = await self._get_client()
             response = await client.table('transcripts')\
                 .select("*, videos(*)")\
-                .eq("id", str(transcript_id))\
+                .eq("id", self._uuid_str(transcript_id))\
                 .is_("deleted_at", "null")\
-                .single()\
+                .maybe_single()\
                 .execute()
-            return response.data if response.data else None
+            return response.data if response and response.data else None
         except Exception as e:
-            raise Exception(f"Failed to get transcript with video: {str(e)}")
+            raise DatabaseError(f"Failed to get transcript with video: {str(e)}") from e
 
     # Client methods
     async def create_client_with_session(self, name: str, user_id: UUID, access_token: str, refresh_token: str) -> Client:
@@ -420,7 +455,7 @@ class SupabaseService:
             # Verify session is set properly
             current_user = await user_client.auth.get_user()
             if not current_user or not current_user.user:
-                raise Exception("Failed to set user session for client creation")
+                raise AuthenticationError("Failed to set user session for client creation")
             
             # Create client
             client_response = await user_client.table('clients').insert({
@@ -444,7 +479,7 @@ class SupabaseService:
             return Client(**client_data)
             
         except Exception as e:
-            raise Exception(f"Failed to create client: {str(e)}")
+            raise DatabaseError(f"Failed to create client: {str(e)}") from e
 
     async def create_client(self, name: str, user_id: UUID) -> Client:
         """Create a new client and add the creator as owner"""
@@ -470,7 +505,7 @@ class SupabaseService:
             
             return Client(**client_data)
         except Exception as e:
-            raise Exception(f"Failed to create client: {str(e)}")
+            raise DatabaseError(f"Failed to create client: {str(e)}") from e
     
     async def get_user_client(self, user_id: UUID, client_id: Optional[UUID] = None) -> Optional[Client]:
         """Get a user's client information with optional admin bypass"""
@@ -508,7 +543,7 @@ class SupabaseService:
             
             return Client(**client_response.data) if client_response.data else None
         except Exception as e:
-            raise Exception(f"Failed to get user client: {str(e)}")
+            raise DatabaseError(f"Failed to get user client: {str(e)}") from e
     
     async def _is_admin_user(self, user_id: UUID) -> bool:
         """Check if user is admin for testing purposes"""
@@ -553,7 +588,7 @@ class SupabaseService:
             
             return [ClientUser(**user) for user in response.data]
         except Exception as e:
-            raise Exception(f"Failed to get client users: {str(e)}")
+            raise DatabaseError(f"Failed to get client users: {str(e)}") from e
     
     async def add_client_user(self, email: str, role: str, added_by: UUID) -> ClientUser:
         """Add a user to a client"""
@@ -562,7 +597,7 @@ class SupabaseService:
             # Get the client of the user adding
             user_client = await self.get_user_client(added_by)
             if not user_client:
-                raise Exception("User is not associated with any client")
+                raise ValidationError("User is not associated with any client")
             
             # Check if user exists, if not create them
             user_response = await client.auth.admin.list_users()
@@ -578,7 +613,7 @@ class SupabaseService:
             # Check if user already belongs to a client
             existing_client = await self.get_user_client(UUID(user.id))
             if existing_client:
-                raise Exception(f"User already belongs to client: {existing_client.name}")
+                raise ValidationError(f"User already belongs to client: {existing_client.name}")
             
             # Add user to client
             response = await client.table('client_users').insert({
@@ -591,7 +626,7 @@ class SupabaseService:
             
             return ClientUser(**response.data[0])
         except Exception as e:
-            raise Exception(f"Failed to add client user: {str(e)}")
+            raise DatabaseError(f"Failed to add client user: {str(e)}") from e
     
     async def remove_client_user(self, user_id: UUID, removed_by: UUID) -> None:
         """Remove a user from a client (soft delete)"""
@@ -600,7 +635,7 @@ class SupabaseService:
             # Get the client of the user removing
             user_client = await self.get_user_client(removed_by)
             if not user_client:
-                raise Exception("User is not associated with any client")
+                raise ValidationError("User is not associated with any client")
             
             # Soft delete the user from the client
             await client.table('client_users')\
@@ -614,7 +649,7 @@ class SupabaseService:
                 .is_("deleted_at", "null")\
                 .execute()
         except Exception as e:
-            raise Exception(f"Failed to remove client user: {str(e)}")
+            raise DatabaseError(f"Failed to remove client user: {str(e)}") from e
 
     async def get_client_videos(self, client_id: UUID) -> List[Video]:
         """Get videos for a client"""
@@ -627,7 +662,7 @@ class SupabaseService:
                 .execute()
             return [Video(**video) for video in response.data]
         except Exception as e:
-            raise Exception(f"Failed to get client videos: {str(e)}")
+            raise DatabaseError(f"Failed to get client videos: {str(e)}") from e
 
 # Create a singleton instance
 supabase_service = SupabaseService() 

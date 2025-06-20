@@ -155,18 +155,56 @@ async def get_transcription_status(
         from uuid import UUID
         transcript_uuid = UUID(transcript_id)
         
-        # This will be implemented when we add the get_transcript method
-        # For now, return a placeholder
+        # Get user's client for authorization
+        client = await supabase_service.get_user_client(current_user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to access transcripts"
+            )
+        
+        # Get transcript
+        transcript = await supabase_service.get_transcript(transcript_uuid)
+        if not transcript:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transcript not found"
+            )
+        
+        # Check authorization - user can only access their client's transcripts
+        if transcript.client_id != client.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: transcript belongs to different organization"
+            )
+        
+        # Calculate estimated completion time for processing jobs
+        estimated_completion = None
+        if transcript.status == "processing":
+            from datetime import datetime, timedelta, UTC
+            # Rough estimate: 1 minute per MB (very conservative)
+            # This would typically come from video metadata
+            estimated_minutes = 5  # Default estimate
+            estimated_completion = (transcript.created_at + timedelta(minutes=estimated_minutes)).isoformat()
+        
         return {
-            "transcript_id": transcript_id,
-            "status": "processing",
-            "message": "Status checking will be implemented in next version"
+            "transcript_id": str(transcript.id),
+            "video_id": str(transcript.video_id),
+            "status": transcript.status,
+            "created_at": transcript.created_at.isoformat(),
+            "updated_at": transcript.updated_at.isoformat(),
+            "estimated_completion": estimated_completion,
+            "error_message": transcript.error_message,
+            "request_id": transcript.request_id
         }
+        
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid transcript ID format"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting transcription status: {str(e)}")
         raise HTTPException(
@@ -174,17 +212,327 @@ async def get_transcription_status(
             detail="Failed to get transcription status"
         )
 
+@router.get("/")
+async def list_transcripts(
+    current_user: User = Depends(get_current_user),
+    limit: int = 20,
+    offset: int = 0,
+    status_filter: str = None
+):
+    """List user's transcripts with pagination and optional status filtering"""
+    try:
+        # Validate pagination parameters
+        if limit < 1 or limit > 100:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Limit must be between 1 and 100"
+            )
+        if offset < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Offset must be non-negative"
+            )
+        
+        # Validate status filter if provided
+        valid_statuses = ["pending", "processing", "completed", "failed"]
+        if status_filter and status_filter not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status filter. Must be one of: {', '.join(valid_statuses)}"
+            )
+        
+        # Get user's client for authorization
+        client = await supabase_service.get_user_client(current_user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to access transcripts"
+            )
+        
+        # For now, get all user transcripts (we'll add pagination to service layer later)
+        user_transcripts = await supabase_service.get_user_transcripts(current_user.id)
+        
+        # Filter by client (extra security layer)
+        client_transcripts = [t for t in user_transcripts if t.client_id == client.id]
+        
+        # Apply status filter if provided
+        if status_filter:
+            client_transcripts = [t for t in client_transcripts if t.status == status_filter]
+        
+        # Apply pagination
+        total_count = len(client_transcripts)
+        paginated_transcripts = client_transcripts[offset:offset + limit]
+        
+        # Format response
+        transcripts_data = []
+        for transcript in paginated_transcripts:
+            transcripts_data.append({
+                "transcript_id": str(transcript.id),
+                "video_id": str(transcript.video_id),
+                "status": transcript.status,
+                "created_at": transcript.created_at.isoformat(),
+                "updated_at": transcript.updated_at.isoformat(),
+                "request_id": transcript.request_id,
+                "error_message": transcript.error_message,
+                "has_content": bool(transcript.raw_transcript or transcript.processed_transcript)
+            })
+        
+        return {
+            "transcripts": transcripts_data,
+            "pagination": {
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_more": offset + limit < total_count
+            },
+            "filters": {
+                "status": status_filter
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing transcripts: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list transcripts"
+        )
+
+@router.get("/video/{video_id}")
+async def get_video_transcript(
+    video_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get transcript for a specific video"""
+    try:
+        from uuid import UUID
+        video_uuid = UUID(video_id)
+        
+        # Get user's client for authorization
+        client = await supabase_service.get_user_client(current_user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to access transcripts"
+            )
+        
+        # Get transcript for the video
+        transcript = await supabase_service.get_video_transcript(video_uuid)
+        if not transcript:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transcript not found for this video"
+            )
+        
+        # Check authorization - user can only access their client's transcripts
+        if transcript.client_id != client.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: transcript belongs to different organization"
+            )
+        
+        # Format basic transcript info (similar to status endpoint)
+        return {
+            "transcript_id": str(transcript.id),
+            "video_id": str(transcript.video_id),
+            "status": transcript.status,
+            "created_at": transcript.created_at.isoformat(),
+            "updated_at": transcript.updated_at.isoformat(),
+            "request_id": transcript.request_id,
+            "error_message": transcript.error_message,
+            "has_content": bool(transcript.raw_transcript or transcript.processed_transcript)
+        }
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid video ID format"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving video transcript: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve video transcript"
+        )
+
+@router.get("/{transcript_id}")
+async def get_transcript(
+    transcript_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get full transcript content with video information"""
+    try:
+        from uuid import UUID
+        transcript_uuid = UUID(transcript_id)
+        
+        # Get user's client for authorization
+        client = await supabase_service.get_user_client(current_user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to access transcripts"
+            )
+        
+        # Get transcript with video information using JOIN
+        transcript_data = await supabase_service.get_transcript_with_video(transcript_uuid)
+        if not transcript_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transcript not found"
+            )
+        
+        # Check authorization - user can only access their client's transcripts
+        if transcript_data.get("client_id") != str(client.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: transcript belongs to different organization"
+            )
+        
+        # Extract video information
+        video_info = transcript_data.get("videos", {})
+        
+        # Format transcript content
+        content = None
+        if transcript_data.get("status") == "completed" and transcript_data.get("raw_transcript"):
+            raw_transcript = transcript_data.get("raw_transcript", {})
+            processed_transcript = transcript_data.get("processed_transcript", {})
+            
+            # Extract content from Deepgram response format
+            content = {
+                "full_transcript": "",
+                "utterances": [],
+                "confidence": 0.0
+            }
+            
+            # Parse Deepgram results format
+            if "results" in raw_transcript and "channels" in raw_transcript["results"]:
+                channels = raw_transcript["results"]["channels"]
+                if channels and len(channels) > 0:
+                    alternatives = channels[0].get("alternatives", [])
+                    if alternatives and len(alternatives) > 0:
+                        alt = alternatives[0]
+                        content["full_transcript"] = alt.get("transcript", "")
+                        content["confidence"] = alt.get("confidence", 0.0)
+                        
+                        # Extract utterances with speaker info
+                        utterances = alt.get("utterances", [])
+                        content["utterances"] = [
+                            {
+                                "speaker": utt.get("speaker", 0),
+                                "text": utt.get("transcript", ""),
+                                "start": utt.get("start", 0.0),
+                                "end": utt.get("end", 0.0),
+                                "confidence": utt.get("confidence", 0.0)
+                            }
+                            for utt in utterances
+                        ]
+        
+        # Calculate duration from video metadata if available
+        duration_seconds = None
+        if video_info and "metadata" in video_info:
+            metadata = video_info.get("metadata", {})
+            duration_seconds = metadata.get("duration_seconds")
+        
+        return {
+            "transcript_id": transcript_data.get("id"),
+            "video": {
+                "id": video_info.get("id"),
+                "filename": video_info.get("filename"),
+                "duration_seconds": duration_seconds,
+                "size_bytes": video_info.get("size_bytes"),
+                "content_type": video_info.get("content_type")
+            },
+            "status": transcript_data.get("status"),
+            "content": content,
+            "created_at": transcript_data.get("created_at"),
+            "updated_at": transcript_data.get("updated_at"),
+            "completed_at": transcript_data.get("updated_at") if transcript_data.get("status") == "completed" else None,
+            "request_id": transcript_data.get("request_id"),
+            "error_message": transcript_data.get("error_message")
+        }
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid transcript ID format"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving transcript: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve transcript"
+        )
+
+@router.get("/callback/test")
+async def test_callback():
+    """Test endpoint to verify callback URL is accessible"""
+    return {
+        "status": "ok",
+        "message": "Callback endpoint is accessible",
+        "timestamp": datetime.now(UTC).isoformat()
+    }
+
 @router.post("/callback")
 async def transcription_callback(request: Request):
     """
     Callback endpoint for Deepgram transcription results
+    Enhanced with robust error handling and debugging
     """
+    # Log incoming request details for debugging
+    logger.info(f"🔔 Deepgram callback received")
+    logger.info(f"   Method: {request.method}")
+    logger.info(f"   URL: {request.url}")
+    logger.info(f"   Headers: {dict(request.headers)}")
+    
     try:
-        # Get the raw JSON data from the request
-        data = await request.json()
+        # Get raw body first for debugging
+        body = await request.body()
+        logger.info(f"   Body size: {len(body)} bytes")
+        logger.info(f"   Content-Type: {request.headers.get('content-type', 'Not set')}")
+        
+        # Handle different content types
+        content_type = request.headers.get('content-type', '').lower()
+        
+        if 'application/json' in content_type:
+            # Parse as JSON
+            try:
+                # Reset request state and parse JSON
+                data = await request.json()
+                logger.info("✅ Successfully parsed JSON payload")
+            except Exception as json_error:
+                logger.error(f"❌ JSON parsing failed: {json_error}")
+                logger.info(f"Raw body: {body.decode('utf-8', errors='ignore')[:1000]}...")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid JSON payload: {str(json_error)}"
+                )
+        else:
+            # Try to parse as JSON anyway (some services don't set correct content-type)
+            try:
+                data = json.loads(body.decode('utf-8'))
+                logger.info("✅ Successfully parsed JSON from body (despite content-type)")
+            except Exception as parse_error:
+                logger.error(f"❌ Could not parse as JSON: {parse_error}")
+                logger.info(f"Raw body: {body.decode('utf-8', errors='ignore')[:1000]}...")
+                # Return success for non-JSON webhooks (some services send test pings)
+                return {
+                    "status": "received",
+                    "message": "Non-JSON callback received",
+                    "content_type": content_type
+                }
+        
+        # Extract request_id for correlation
+        request_id = data.get('metadata', {}).get('request_id') or data.get('request_id')
+        logger.info(f"📋 Request ID: {request_id}")
         
         # Extract and log the transcript details
         if 'results' in data and 'channels' in data['results']:
+            logger.info("🎯 Processing transcription results...")
             for i, channel in enumerate(data['results']['channels']):
                 logger.info(f"\nChannel {i + 1} Transcript Details:")
                 if 'alternatives' in channel:
@@ -204,20 +552,86 @@ async def transcription_callback(request: Request):
                                 logger.info(f"Text: {utterance.get('transcript', 'No text')}")
                                 logger.info(f"Confidence: {utterance.get('confidence', 'No confidence')}")
         else:
-            logger.warning("No transcript data found in callback payload")
+            logger.warning("⚠️ No transcript data found in callback payload")
             
-        # Log the complete raw data for debugging
-        logger.info("\nComplete callback data:")
-        logger.info(json.dumps(data, indent=2))
+        # Log the complete raw data for debugging (truncated for large payloads)
+        data_str = json.dumps(data, indent=2)
+        if len(data_str) > 10000:
+            logger.info(f"\n📄 Complete callback data (truncated - {len(data_str)} chars total):")
+            logger.info(data_str[:10000] + "\n... [TRUNCATED]")
+        else:
+            logger.info("\n📄 Complete callback data:")
+            logger.info(data_str)
+        
+        # **NEW: Store transcription results in database**
+        if request_id:
+            try:
+                logger.info(f"💾 Updating transcript record for request_id: {request_id}")
+                
+                # Find transcript by request_id
+                transcript = await supabase_service.get_transcript_by_request_id(request_id)
+                if transcript:
+                    logger.info(f"✅ Found transcript record: {transcript.id}")
+                    
+                    # Determine status based on transcript content
+                    new_status = "completed"
+                    error_message = None
+                    
+                    # Check if transcription was successful
+                    if 'results' in data and 'channels' in data['results']:
+                        channels = data['results']['channels']
+                        if channels and len(channels) > 0 and 'alternatives' in channels[0]:
+                            alternatives = channels[0]['alternatives']
+                            if alternatives and len(alternatives) > 0:
+                                transcript_text = alternatives[0].get('transcript', '').strip()
+                                if not transcript_text:
+                                    new_status = "failed"
+                                    error_message = "No transcript content received from Deepgram"
+                            else:
+                                new_status = "failed"
+                                error_message = "No alternatives found in Deepgram response"
+                        else:
+                            new_status = "failed"
+                            error_message = "No channels found in Deepgram response"
+                    else:
+                        new_status = "failed"
+                        error_message = "Invalid Deepgram response structure"
+                    
+                    # Update transcript with results
+                    update_data = {
+                        "status": new_status,
+                        "raw_transcript": data,
+                        "processed_transcript": {"processed_at": datetime.now(UTC).isoformat()},
+                        "error_message": error_message
+                    }
+                    
+                    updated_transcript = await supabase_service.update_transcript(transcript.id, update_data, transcript.created_by)
+                    if updated_transcript:
+                        logger.info(f"✅ Transcript updated successfully - Status: {new_status}")
+                    else:
+                        logger.error("❌ Failed to update transcript record")
+                else:
+                    logger.warning(f"⚠️ No transcript found with request_id: {request_id}")
+                    
+            except Exception as db_error:
+                logger.error(f"💥 Error updating transcript in database: {str(db_error)}", exc_info=True)
+                # Don't fail the callback - Deepgram expects 200 response
+        else:
+            logger.warning("⚠️ No request_id found in callback data - cannot update transcript")
         
         return {
             "status": "success",
             "message": "Callback received and processed",
-            "processed_at": datetime.now(UTC).isoformat()
+            "processed_at": datetime.now(UTC).isoformat(),
+            "request_id": request_id
         }
             
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 400 Bad Request)
+        raise
     except Exception as e:
-        logger.error(f"Error processing Deepgram callback: {str(e)}", exc_info=True)
+        logger.error(f"💥 Unexpected error processing Deepgram callback: {str(e)}", exc_info=True)
+        # Return 500 for unexpected errors, but log details
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process callback: {str(e)}"
