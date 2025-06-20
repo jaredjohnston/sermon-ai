@@ -15,6 +15,28 @@ from app.models.schemas import (
 )
 import uuid
 
+
+# Custom exceptions for better error handling
+class SupabaseServiceError(Exception):
+    """Base exception for SupabaseService errors"""
+    pass
+
+class AuthenticationError(SupabaseServiceError):
+    """Raised when authentication fails"""
+    pass
+
+class DatabaseError(SupabaseServiceError):
+    """Raised when database operations fail"""
+    pass
+
+class NotFoundError(SupabaseServiceError):
+    """Raised when requested resource is not found"""
+    pass
+
+class ValidationError(SupabaseServiceError):
+    """Raised when data validation fails"""
+    pass
+
 class SupabaseService:
     """Service for handling Supabase operations"""
     
@@ -40,6 +62,14 @@ class SupabaseService:
             )
         return self._service_client
     
+    async def _get_client(self) -> AsyncClient:
+        """Get default async Supabase client (service role for most operations)"""
+        return await self._get_service_client()
+    
+    def _uuid_str(self, uuid_value: UUID) -> str:
+        """Helper method to convert UUID to string consistently"""
+        return str(uuid_value)
+    
     # Auth methods
     async def sign_up(self, user: UserCreate) -> User:
         """Register a new user"""
@@ -51,7 +81,7 @@ class SupabaseService:
             })
             return User(**response.user.dict())
         except Exception as e:
-            raise Exception(f"Failed to sign up user: {str(e)}")
+            raise AuthenticationError(f"Failed to sign up user: {str(e)}")
     
     async def sign_in(self, email: str, password: str) -> Dict[str, Any]:
         """Sign in a user"""
@@ -131,76 +161,25 @@ class SupabaseService:
             raise Exception(f"Failed to get user: {str(e)}")
     
     # User Profile methods
-    async def create_user_profile_with_session(self, profile: UserProfileCreate, user_id: UUID, access_token: str, refresh_token: str) -> UserProfile:
-        """Create a user profile using the user's session (for RLS compliance)"""
+    async def create_user_profile(self, profile: UserProfileCreate, user_id: UUID) -> UserProfile:
+        """Create a user profile using service role with proper audit fields"""
         try:
-            # Create client with user's session token for RLS compliance
-            user_client = await acreate_client(
-                settings.SUPABASE_URL,
-                settings.SUPABASE_SERVICE_ROLE_KEY
-            )
-            
-            # Set the user's session with both tokens
-            await user_client.auth.set_session(access_token, refresh_token)
-            
-            # Debug: Check if session is properly set
-            current_user = await user_client.auth.get_user()
-            user_id_from_session = current_user.user.id if current_user and current_user.user else None
-            print(f"DEBUG: User after setting session: {user_id_from_session}")
-            print(f"DEBUG: Expected user_id: {user_id}")
-            
-            if not user_id_from_session:
-                print("DEBUG: Session not set properly, auth.uid() will be None")
-            
-            response = await user_client.table('user_profiles').insert({
-                "user_id": str(user_id),
+            client = await self._get_service_client()
+            response = await client.table('user_profiles').insert({
+                "user_id": self._uuid_str(user_id),
                 "first_name": profile.first_name,
                 "last_name": profile.last_name,
                 "country": profile.country,
                 "phone": profile.phone,
                 "bio": profile.bio,
                 "avatar_url": profile.avatar_url,
-                "created_by": str(user_id),
-                "updated_by": str(user_id)
+                "created_by": self._uuid_str(user_id),
+                "updated_by": self._uuid_str(user_id)
             }).execute()
             
             if not response.data:
                 raise Exception("Failed to create user profile - no data returned")
-            
-            return UserProfile(**response.data[0])
-            
-        except Exception as e:
-            raise Exception(f"Failed to create user profile: {str(e)}")
-
-    async def create_user_profile(self, profile: UserProfileCreate, user_id: UUID) -> UserProfile:
-        """Create a user profile using service role (admin bypass)"""
-        try:
-            client = await self._get_service_client()
-            
-            # First attempt: let trigger handle audit fields
-            try:
-                response = await client.table('user_profiles').insert({
-                    "user_id": str(user_id),
-                    "first_name": profile.first_name,
-                    "last_name": profile.last_name,
-                    "country": profile.country,
-                    "phone": profile.phone,
-                    "bio": profile.bio,
-                    "avatar_url": profile.avatar_url,
-                }).execute()
-            except Exception:
-                # Fallback: insert with explicit audit fields for service role
-                response = await client.table('user_profiles').insert({
-                    "user_id": str(user_id),
-                    "first_name": profile.first_name,
-                    "last_name": profile.last_name,
-                    "country": profile.country,
-                    "phone": profile.phone,
-                    "bio": profile.bio,
-                    "avatar_url": profile.avatar_url,
-                    "created_by": str(user_id),
-                    "updated_by": str(user_id)
-                }).execute()
+                
             return UserProfile(**response.data[0])
         except Exception as e:
             raise Exception(f"Failed to create user profile: {str(e)}")
@@ -369,6 +348,62 @@ class SupabaseService:
         except Exception as e:
             raise Exception(f"Failed to get client transcripts: {str(e)}")
 
+    async def get_transcript(self, transcript_id: UUID) -> Optional[Transcript]:
+        """Get a single transcript by ID"""
+        try:
+            client = await self._get_client()
+            response = await client.table('transcripts')\
+                .select("*")\
+                .eq("id", self._uuid_str(transcript_id))\
+                .is_("deleted_at", "null")\
+                .single()\
+                .execute()
+            return Transcript(**response.data) if response.data else None
+        except Exception as e:
+            raise DatabaseError(f"Failed to get transcript: {str(e)}")
+
+    async def get_user_transcripts(self, user_id: UUID) -> List[Transcript]:
+        """Get all transcripts for a user (filtered by their client)"""
+        try:
+            client = await self._get_client()
+            response = await client.table('transcripts')\
+                .select("*")\
+                .eq("created_by", str(user_id))\
+                .is_("deleted_at", "null")\
+                .order("created_at", desc=True)\
+                .execute()
+            return [Transcript(**transcript) for transcript in response.data]
+        except Exception as e:
+            raise Exception(f"Failed to get user transcripts: {str(e)}")
+
+    async def get_video_transcript(self, video_id: UUID) -> Optional[Transcript]:
+        """Get the transcript for a specific video"""
+        try:
+            client = await self._get_client()
+            response = await client.table('transcripts')\
+                .select("*")\
+                .eq("video_id", str(video_id))\
+                .is_("deleted_at", "null")\
+                .single()\
+                .execute()
+            return Transcript(**response.data) if response.data else None
+        except Exception as e:
+            raise Exception(f"Failed to get video transcript: {str(e)}")
+
+    async def get_transcript_with_video(self, transcript_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get transcript with related video information (JOIN query)"""
+        try:
+            client = await self._get_client()
+            response = await client.table('transcripts')\
+                .select("*, videos(*)")\
+                .eq("id", str(transcript_id))\
+                .is_("deleted_at", "null")\
+                .single()\
+                .execute()
+            return response.data if response.data else None
+        except Exception as e:
+            raise Exception(f"Failed to get transcript with video: {str(e)}")
+
     # Client methods
     async def create_client_with_session(self, name: str, user_id: UUID, access_token: str, refresh_token: str) -> Client:
         """Create a new client using user's session (for RLS compliance) and add the creator as owner"""
@@ -376,20 +411,16 @@ class SupabaseService:
             # Create client with user's session token for RLS compliance
             user_client = await acreate_client(
                 settings.SUPABASE_URL,
-                settings.SUPABASE_SERVICE_ROLE_KEY
+                settings.SUPABASE_ANON_KEY
             )
             
             # Set the user's session with both tokens
             await user_client.auth.set_session(access_token, refresh_token)
             
-            # Debug: Check if session is properly set for client creation
+            # Verify session is set properly
             current_user = await user_client.auth.get_user()
-            user_id_from_session = current_user.user.id if current_user and current_user.user else None
-            print(f"DEBUG CLIENT: User after setting session: {user_id_from_session}")
-            print(f"DEBUG CLIENT: Expected user_id: {user_id}")
-            
-            if not user_id_from_session:
-                print("DEBUG CLIENT: Session not set properly, auth.uid() will be None")
+            if not current_user or not current_user.user:
+                raise Exception("Failed to set user session for client creation")
             
             # Create client
             client_response = await user_client.table('clients').insert({
