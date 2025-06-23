@@ -15,6 +15,7 @@ from app.models.schemas import (
 )
 import uuid
 import logging
+from fastapi import UploadFile
 
 
 # Custom exceptions for better error handling
@@ -663,6 +664,101 @@ class SupabaseService:
             return [Video(**video) for video in response.data]
         except Exception as e:
             raise DatabaseError(f"Failed to get client videos: {str(e)}") from e
+
+    # File upload methods
+    async def upload_file_with_smart_routing(
+        self,
+        file: UploadFile,
+        bucket_name: str,
+        storage_path: str,
+        file_size: int,
+        size_threshold: int = 6 * 1024 * 1024  # 6MB threshold
+    ) -> str:
+        """
+        Smart file upload routing: standard upload for small files, TUS for large files
+        
+        Args:
+            file: FastAPI UploadFile object
+            bucket_name: Supabase storage bucket name
+            storage_path: Path where file will be stored  
+            file_size: Size of the file in bytes
+            size_threshold: Size threshold for using TUS (default 6MB)
+            
+        Returns:
+            str: Public URL of the uploaded file
+        """
+        try:
+            if file_size <= size_threshold:
+                self.logger.info(f"Using standard upload for {storage_path} ({file_size/1024/1024:.2f}MB)")
+                return await self._upload_file_standard(file, bucket_name, storage_path)
+            else:
+                self.logger.info(f"Using TUS resumable upload for {storage_path} ({file_size/1024/1024:.2f}MB)")
+                return await self._upload_file_tus(file, bucket_name, storage_path)
+                
+        except Exception as e:
+            raise DatabaseError(f"Failed to upload file {storage_path}: {str(e)}") from e
+    
+    async def _upload_file_standard(
+        self,
+        file: UploadFile,
+        bucket_name: str,
+        storage_path: str
+    ) -> str:
+        """Upload file using standard Supabase upload (for files ≤6MB)"""
+        try:
+            client = await self._get_service_client()
+            
+            # Read file content
+            file.file.seek(0)
+            file_content = file.file.read()
+            
+            # Upload to Supabase storage
+            response = client.storage.from_(bucket_name).upload(
+                storage_path,
+                file_content,
+                file_options={
+                    "content-type": file.content_type,
+                    "cache-control": "3600"
+                }
+            )
+            
+            if hasattr(response, 'error') and response.error:
+                raise Exception(f"Supabase upload error: {response.error}")
+            
+            # Generate public URL
+            public_url = client.storage.from_(bucket_name).get_public_url(storage_path)
+            
+            self.logger.info(f"Standard upload completed: {storage_path}")
+            return public_url
+            
+        except Exception as e:
+            self.logger.error(f"Standard upload failed for {storage_path}: {str(e)}")
+            raise
+    
+    async def _upload_file_tus(
+        self,
+        file: UploadFile,
+        bucket_name: str,
+        storage_path: str
+    ) -> str:
+        """Upload file using TUS resumable upload (for files >6MB)"""
+        try:
+            from app.services.tus_upload_service import tus_upload_service
+            
+            # Use TUS service for large file upload
+            public_url = await tus_upload_service.upload_file_resumable(
+                file=file,
+                bucket_name=bucket_name,
+                storage_path=storage_path,
+                content_type=file.content_type or "application/octet-stream"
+            )
+            
+            self.logger.info(f"TUS upload completed: {storage_path}")
+            return public_url
+            
+        except Exception as e:
+            self.logger.error(f"TUS upload failed for {storage_path}: {str(e)}")
+            raise
 
 # Create a singleton instance
 supabase_service = SupabaseService() 

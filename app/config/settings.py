@@ -14,9 +14,13 @@ class Settings(BaseSettings):
     DEEPGRAM_API_KEY: str = os.getenv("DEEPGRAM_API_KEY", "")
     
     # File Upload Settings
-    MAX_FILE_SIZE: int = 4 * 1024 * 1024 * 1024  # 4GB
+    MAX_FILE_SIZE: int = 50 * 1024 * 1024 * 1024  # 50GB (Supabase Pro+ limit)
     CHUNK_SIZE: int = 1024 * 1024  # 1MB chunks for streaming
-    UPLOAD_TIMEOUT: int = 600  # 10 minutes
+    UPLOAD_TIMEOUT: int = 1800  # 30 minutes for large files
+    
+    # TUS Upload Settings
+    TUS_CHUNK_SIZE: int = 6 * 1024 * 1024  # 6MB chunks (Supabase recommended)
+    TUS_THRESHOLD: int = 6 * 1024 * 1024  # Use TUS for files > 6MB
     
     # Callback Settings
     CALLBACK_URL: str = os.getenv("CALLBACK_URL", "http://localhost:8000/api/v1/transcription/callback")

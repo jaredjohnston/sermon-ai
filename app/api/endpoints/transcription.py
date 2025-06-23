@@ -67,13 +67,32 @@ async def transcribe_upload(
             )
             logger.info(f"Video record created: {video.id}")
             
-            # STEP 3: Upload file to storage
-            logger.info(f"Uploading {file_size_mb}MB file to storage (this may take a moment)...")
-            supabase_signed_url = await deepgram_service.upload_to_supabase(
-                file=file.file,
-                content_type=file.content_type,
-                storage_path=storage_path
-            )
+            # STEP 3: Upload file to storage using smart routing
+            logger.info(f"Uploading {file_size_mb}MB file to storage using {'TUS resumable' if file_size > settings.TUS_THRESHOLD else 'standard'} upload...")
+            
+            if file_size <= settings.TUS_THRESHOLD:
+                # Use existing standard upload for small files
+                supabase_signed_url = await deepgram_service.upload_to_supabase(
+                    file=file.file,
+                    content_type=file.content_type,
+                    storage_path=storage_path
+                )
+            else:
+                # Use new TUS resumable upload for large files
+                public_url = await supabase_service.upload_file_with_smart_routing(
+                    file=file,
+                    bucket_name=settings.STORAGE_BUCKET,
+                    storage_path=storage_path,
+                    file_size=file_size,
+                    size_threshold=settings.TUS_THRESHOLD
+                )
+                
+                # Generate signed URL for Deepgram (TUS upload returns public URL)
+                from supabase import create_client
+                temp_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+                signed_url_response = temp_supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(storage_path, 60 * 60 * 24)
+                supabase_signed_url = signed_url_response['signedURL']
+            
             logger.info(f"File uploaded successfully, signed URL generated")
             
             # STEP 4: Start AI transcription
