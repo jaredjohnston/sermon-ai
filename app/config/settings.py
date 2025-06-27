@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 50 * 1024 * 1024 * 1024  # 50GB (Supabase Pro+ limit)
     CHUNK_SIZE: int = 1024 * 1024  # 1MB chunks for streaming
     UPLOAD_TIMEOUT: int = 1800  # 30 minutes for large files
+    TEST_TIMEOUT: int = 180  # 3 minutes for test operations
     
     # TUS Upload Settings
     TUS_CHUNK_SIZE: int = 6 * 1024 * 1024  # 6MB chunks (Supabase recommended)
@@ -184,6 +185,9 @@ class Settings(BaseSettings):
     # Storage Settings
     STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "videos")
     STORAGE_PATH_PREFIX: str = "clients"  # Base path for all client files
+    
+    # Audio File Settings
+    AUDIO_RETENTION_DAYS: int = int(os.getenv("AUDIO_RETENTION_DAYS", "30"))  # Keep audio files for 30 days for audit purposes
     
     # Admin/Testing Settings
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "jared.johnston@me.com")  # Change this to your email

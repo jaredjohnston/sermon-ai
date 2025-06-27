@@ -203,6 +203,7 @@ class TranscriptBase(BaseModel):
     processed_transcript: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
     request_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 class TranscriptCreate(TranscriptBase):
     """Request to create a transcript"""

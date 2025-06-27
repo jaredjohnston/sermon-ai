@@ -1,16 +1,65 @@
+import asyncio
 import logging
+from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, HTTPException, status, Request, Depends
 from app.config.settings import settings
 from app.services.deepgram_service import deepgram_service
 from app.services.supabase_service import supabase_service
 from app.services.validation_service import validation_service
+from app.services.audio_extraction_service import audio_extraction_service, AudioExtractionError
+from app.services.audio_cleanup_service import audio_cleanup_service
 from app.middleware.auth import get_current_user
 from app.models.schemas import User, VideoCreate, TranscriptCreate
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def upload_video_from_temp_file(temp_video_path: Path, storage_path: str, file_size: int, content_type: str) -> str:
+    """
+    Upload video file from temporary file to Supabase storage using smart routing
+    
+    Returns:
+        Signed URL for the uploaded video
+    """
+    try:
+        # Use the new boring approach - upload directly from file path
+        public_url = await supabase_service.upload_file_from_path(
+            file_path=temp_video_path,
+            bucket_name=settings.STORAGE_BUCKET,
+            storage_path=storage_path,
+            content_type=content_type,
+            file_size=file_size,
+            size_threshold=settings.TUS_THRESHOLD
+        )
+        
+        # Generate signed URL for potential future use
+        from supabase import create_client
+        temp_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+        signed_url_response = temp_supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(storage_path, 60 * 60 * 24)
+        signed_url = signed_url_response['signedURL']
+        
+        return signed_url
+        
+    finally:
+        # Cleanup temp file after upload (always runs)
+        audio_extraction_service.cleanup_temp_video_file(temp_video_path)
+
+
+async def extract_and_upload_audio(file: UploadFile, client_id: str, video_id: str) -> tuple[str, str, Path]:
+    """
+    Extract audio from video and immediately upload to Supabase
+    
+    Returns:
+        Tuple of (audio_storage_path, audio_signed_url, temp_video_path)
+    """
+    return await audio_extraction_service.extract_and_upload_audio(
+        video_stream=file,
+        client_id=client_id,  
+        video_id=video_id
+    )
 
 @router.post("/upload")
 async def transcribe_upload(
@@ -67,46 +116,51 @@ async def transcribe_upload(
             )
             logger.info(f"Video record created: {video.id}")
             
-            # STEP 3: Upload file to storage using smart routing
-            logger.info(f"Uploading {file_size_mb}MB file to storage using {'TUS resumable' if file_size > settings.TUS_THRESHOLD else 'standard'} upload...")
+            # STEP 3: Sequential stream save, then concurrent processing
+            logger.info(f"Starting concurrent video upload and audio extraction for {file_size_mb}MB file...")
             
-            if file_size <= settings.TUS_THRESHOLD:
-                # Use existing standard upload for small files
-                supabase_signed_url = await deepgram_service.upload_to_supabase(
-                    file=file.file,
-                    content_type=file.content_type,
-                    storage_path=storage_path
+            # STEP 4: Extract audio and get temp file for video upload
+            logger.info(f"Extracting audio for immediate transcription...")
+            try:
+                audio_storage_path, audio_signed_url, temp_video_path = await extract_and_upload_audio(
+                    file, client.id, str(video.id)
                 )
-            else:
-                # Use new TUS resumable upload for large files
-                public_url = await supabase_service.upload_file_with_smart_routing(
-                    file=file,
-                    bucket_name=settings.STORAGE_BUCKET,
-                    storage_path=storage_path,
-                    file_size=file_size,
-                    size_threshold=settings.TUS_THRESHOLD
+                logger.info(f"Audio extracted and uploaded - starting transcription immediately")
+                
+                # Start transcription with audio immediately (don't wait for video upload)
+                result = await deepgram_service.transcribe_from_url(audio_signed_url)
+                logger.info(f"Transcription started with request_id: {result.get('request_id')}")
+                
+                # Start video upload in background using the temp file
+                video_upload_task = asyncio.create_task(
+                    upload_video_from_temp_file(temp_video_path, storage_path, file_size, file.content_type),
+                    name="video_upload"
                 )
                 
-                # Generate signed URL for Deepgram (TUS upload returns public URL)
-                from supabase import create_client
-                temp_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-                signed_url_response = temp_supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(storage_path, 60 * 60 * 24)
-                supabase_signed_url = signed_url_response['signedURL']
+            except AudioExtractionError as e:
+                logger.error(f"Audio extraction failed: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Audio extraction failed: {str(e)}"
+                )
+            except Exception as e:
+                logger.error(f"Audio processing failed: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Audio processing failed: {str(e)}"
+                )
             
-            logger.info(f"File uploaded successfully, signed URL generated")
+            # Video upload continues in background - we don't wait for it
+            logger.info(f"Video upload continues in background while transcription processes...")
             
-            # STEP 4: Start AI transcription
-            logger.info(f"Starting AI transcription with Deepgram...")
-            result = await deepgram_service.transcribe_from_url(supabase_signed_url)
-            logger.info(f"Transcription job started with request_id: {result.get('request_id')}")
-            
-            # STEP 5: Create transcript tracking record
+            # STEP 5: Create transcript tracking record with audio path for cleanup
             transcript = await supabase_service.create_transcript(
                 TranscriptCreate(
                     video_id=video.id,
                     client_id=client.id,
                     status="processing",
-                    request_id=result.get("request_id")
+                    request_id=result.get("request_id"),
+                    metadata={"audio_storage_path": audio_storage_path}  # Store for cleanup
                 ),
                 current_user.id
             )
@@ -115,7 +169,7 @@ async def transcribe_upload(
             # SUCCESS: Return comprehensive status information
             return {
                 "success": True,
-                "message": "File uploaded and transcription started successfully",
+                "message": "Audio extracted and transcription started immediately. Video upload continues in background.",
                 "video_id": str(video.id),
                 "transcript_id": str(transcript.id),
                 "request_id": result.get("request_id"),
@@ -125,9 +179,14 @@ async def transcribe_upload(
                     "size_mb": file_size_mb,
                     "content_type": file.content_type
                 },
+                "processing_info": {
+                    "audio_extracted": True,
+                    "transcription_started": True,
+                    "video_upload_status": "background_processing"
+                },
                 "next_steps": {
-                    "description": "Transcription is processing in the background",
-                    "estimated_time": f"~{max(2, int(file_size_mb / 50))} minutes",  # Rough estimate
+                    "description": "Transcription processing from extracted audio (faster than full video)",
+                    "estimated_time": f"~{max(2, int(file_size_mb / 100))} minutes",  # Faster estimate for audio
                     "callback_url": result.get("callback_url")
                 }
             }
@@ -627,6 +686,40 @@ async def transcription_callback(request: Request):
                     updated_transcript = await supabase_service.update_transcript(transcript.id, update_data, transcript.created_by)
                     if updated_transcript:
                         logger.info(f"✅ Transcript updated successfully - Status: {new_status}")
+                        
+                        # Schedule audio file cleanup after retention period
+                        if new_status == "completed":
+                            try:
+                                # Get audio storage path from transcript metadata
+                                metadata = transcript.metadata or {}
+                                audio_storage_path = metadata.get("audio_storage_path")
+                                
+                                if audio_storage_path:
+                                    if settings.AUDIO_RETENTION_DAYS > 0:
+                                        # Schedule cleanup after retention period
+                                        logger.info(f"📅 Audio file scheduled for cleanup after {settings.AUDIO_RETENTION_DAYS} days: {audio_storage_path}")
+                                        
+                                        # Update transcript metadata with cleanup schedule
+                                        cleanup_date = datetime.now(UTC) + timedelta(days=settings.AUDIO_RETENTION_DAYS)
+                                        updated_metadata = metadata.copy()
+                                        updated_metadata["audio_cleanup_scheduled"] = cleanup_date.isoformat()
+                                        
+                                        await supabase_service.update_transcript(
+                                            transcript.id, 
+                                            {"metadata": updated_metadata}, 
+                                            transcript.created_by
+                                        )
+                                    else:
+                                        # Immediate cleanup (legacy behavior)
+                                        await audio_extraction_service.cleanup_audio_file(audio_storage_path)
+                                        logger.info(f"🧹 Immediate cleanup: {audio_storage_path}")
+                                else:
+                                    logger.info(f"ℹ️ No audio storage path found in transcript metadata")
+                                    
+                            except Exception as cleanup_error:
+                                logger.warning(f"⚠️ Failed to schedule audio cleanup: {str(cleanup_error)}")
+                                # Don't fail the callback for cleanup errors
+                        
                     else:
                         logger.error("❌ Failed to update transcript record")
                 else:
@@ -654,4 +747,73 @@ async def transcription_callback(request: Request):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process callback: {str(e)}"
+        )
+
+@router.post("/admin/cleanup-audio")
+async def cleanup_expired_audio_files(current_user: User = Depends(get_current_user)):
+    """
+    Admin endpoint to manually trigger cleanup of expired audio files
+    Only accessible by admin users
+    """
+    try:
+        # Check if user is admin (you can modify this check based on your admin logic)
+        if current_user.email != settings.ADMIN_EMAIL:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
+        
+        logger.info(f"🔧 Admin audio cleanup triggered by: {current_user.email}")
+        
+        # Run the cleanup
+        result = await audio_cleanup_service.cleanup_expired_audio_files()
+        
+        return {
+            "success": True,
+            "message": "Audio cleanup completed",
+            "details": result,
+            "triggered_by": current_user.email,
+            "triggered_at": datetime.now(UTC).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error in admin audio cleanup: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Cleanup failed: {str(e)}"
+        )
+
+@router.get("/admin/cleanup-stats")
+async def get_audio_cleanup_statistics(current_user: User = Depends(get_current_user)):
+    """
+    Admin endpoint to get statistics about audio file cleanup
+    Only accessible by admin users
+    """
+    try:
+        # Check if user is admin
+        if current_user.email != settings.ADMIN_EMAIL:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
+        
+        # Get cleanup statistics
+        stats = await audio_cleanup_service.get_cleanup_statistics()
+        
+        return {
+            "success": True,
+            "statistics": stats,
+            "retrieved_by": current_user.email,
+            "retrieved_at": datetime.now(UTC).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting cleanup statistics: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get statistics: {str(e)}"
         )

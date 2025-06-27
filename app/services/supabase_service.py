@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Any
 from uuid import UUID
+from pathlib import Path
 from supabase import create_client, Client
 from supabase._async.client import create_client as acreate_client, AsyncClient
 from app.config.settings import settings
@@ -697,6 +698,109 @@ class SupabaseService:
                 
         except Exception as e:
             raise DatabaseError(f"Failed to upload file {storage_path}: {str(e)}") from e
+    
+    async def upload_file_from_path(
+        self,
+        file_path: Path,
+        bucket_name: str,
+        storage_path: str,
+        content_type: str,
+        file_size: int,
+        size_threshold: int = 6 * 1024 * 1024  # 6MB threshold
+    ) -> str:
+        """
+        Upload file directly from disk path with smart routing
+        
+        Args:
+            file_path: Path to file on disk
+            bucket_name: Supabase storage bucket name  
+            storage_path: Path where file will be stored
+            content_type: MIME type of the file
+            file_size: Size of the file in bytes
+            size_threshold: Size threshold for using TUS (default 6MB)
+            
+        Returns:
+            str: Public URL of the uploaded file
+        """
+        try:
+            if file_size <= size_threshold:
+                self.logger.info(f"Using standard upload from path for {storage_path} ({file_size/1024/1024:.2f}MB)")
+                return await self._upload_file_from_path_standard(file_path, bucket_name, storage_path, content_type)
+            else:
+                self.logger.info(f"Using TUS upload from path for {storage_path} ({file_size/1024/1024:.2f}MB)")
+                return await self._upload_file_from_path_tus(file_path, bucket_name, storage_path, content_type, file_size)
+                
+        except Exception as e:
+            raise DatabaseError(f"Failed to upload file from path {storage_path}: {str(e)}") from e
+    
+    async def _upload_file_from_path_standard(
+        self,
+        file_path: Path,
+        bucket_name: str, 
+        storage_path: str,
+        content_type: str
+    ) -> str:
+        """Upload file from disk path using standard Supabase upload (for files ≤6MB)"""
+        try:
+            self.logger.info(f"Starting standard upload from {file_path} to {storage_path}")
+            
+            # Read file content directly
+            with open(file_path, "rb") as file_content:
+                file_data = file_content.read()
+            
+            # Upload to Supabase storage
+            client = await self._get_service_client()
+            response = client.storage.from_(bucket_name).upload(
+                storage_path,
+                file_data,
+                file_options={"content-type": content_type}
+            )
+            
+            if hasattr(response, 'error') and response.error:
+                raise DatabaseError(f"Supabase upload error: {response.error}")
+            
+            # Generate public URL
+            public_url_response = client.storage.from_(bucket_name).get_public_url(storage_path)
+            return public_url_response
+            
+        except Exception as e:
+            raise DatabaseError(f"Standard upload from path failed: {str(e)}") from e
+    
+    async def _upload_file_from_path_tus(
+        self,
+        file_path: Path,
+        bucket_name: str,
+        storage_path: str, 
+        content_type: str,
+        file_size: int
+    ) -> str:
+        """Upload large file from disk path using TUS resumable upload"""
+        try:
+            self.logger.info(f"Starting TUS upload from {file_path} to {storage_path}")
+            
+            # For TUS upload from path, use the same pattern as existing _upload_file_tus
+            from app.services.tus_upload_service import tus_upload_service
+            from fastapi import UploadFile
+            import os
+            
+            # Create a file pointer that TUS can read from
+            with open(file_path, "rb") as file_obj:
+                # Create minimal UploadFile wrapper (TUS service expects this interface)
+                temp_upload = UploadFile(
+                    filename=os.path.basename(str(file_path)),
+                    file=file_obj,
+                    size=file_size
+                )
+                
+                return await tus_upload_service.upload_file_resumable(
+                    temp_upload,
+                    bucket_name,
+                    storage_path,
+                    content_type
+                )
+            
+        except Exception as e:
+            raise DatabaseError(f"TUS upload from path failed: {str(e)}") from e
     
     async def _upload_file_standard(
         self,
