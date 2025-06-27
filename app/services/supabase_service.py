@@ -9,7 +9,7 @@ from app.models.schemas import (
     UserProfile, UserProfileCreate,
     Team, TeamCreate,
     TeamMember, TeamMemberCreate,
-    Video, VideoCreate,
+    Media, MediaCreate, Video, VideoCreate,  # Media models + backward compatibility
     Transcript, TranscriptCreate,
     Client, ClientCreate,
     ClientUser, ClientUserCreate
@@ -286,37 +286,47 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get user teams: {str(e)}") from e
     
-    # Video methods
-    async def create_video(self, video: VideoCreate, user_id: UUID) -> Video:
-        """Create a new video record"""
+    # Media methods (videos, audio, documents)
+    async def create_media(self, media: MediaCreate, user_id: UUID) -> Media:
+        """Create a new media record (video, audio, or document)"""
         try:
             client = await self._get_service_client()
-            response = await client.table('videos').insert({
-                "filename": video.filename,
-                "storage_path": video.storage_path,
-                "content_type": video.content_type,
-                "size_bytes": video.size_bytes,
-                "client_id": str(video.client_id) if video.client_id else None,
+            response = await client.table('media').insert({
+                "filename": media.filename,
+                "storage_path": media.storage_path,
+                "content_type": media.content_type,
+                "size_bytes": media.size_bytes,
+                "client_id": str(media.client_id) if media.client_id else None,
                 "user_id": str(user_id),
-                "metadata": video.metadata,
+                "metadata": media.metadata,
                 "created_by": str(user_id),
                 "updated_by": str(user_id)
             }).execute()
-            return Video(**response.data[0])
+            return Media(**response.data[0])
         except Exception as e:
-            raise DatabaseError(f"Failed to create video: {str(e)}") from e
+            raise DatabaseError(f"Failed to create media: {str(e)}") from e
     
-    async def get_user_videos(self, user_id: UUID) -> List[Video]:
-        """Get videos for a user"""
+    # Backward compatibility method
+    async def create_video(self, video: VideoCreate, user_id: UUID) -> Video:
+        """Create a new video record (backward compatibility)"""
+        return await self.create_media(video, user_id)
+    
+    async def get_user_media(self, user_id: UUID) -> List[Media]:
+        """Get all media for a user"""
         try:
             client = await self._get_client()
-            response = await client.table('videos')\
+            response = await client.table('media')\
                 .select("*")\
                 .eq("user_id", str(user_id))\
                 .execute()
-            return [Video(**video) for video in response.data]
+            return [Media(**media) for media in response.data]
         except Exception as e:
-            raise DatabaseError(f"Failed to get user videos: {str(e)}") from e
+            raise DatabaseError(f"Failed to get user media: {str(e)}") from e
+    
+    # Backward compatibility method
+    async def get_user_videos(self, user_id: UUID) -> List[Video]:
+        """Get videos for a user (backward compatibility)"""
+        return await self.get_user_media(user_id)
     
     # Transcript methods
     async def create_transcript(self, transcript: TranscriptCreate, user_id: UUID) -> Transcript:
@@ -427,19 +437,24 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get video transcript: {str(e)}") from e
 
-    async def get_transcript_with_video(self, transcript_id: UUID) -> Optional[Dict[str, Any]]:
-        """Get transcript with related video information (JOIN query)"""
+    async def get_transcript_with_media(self, transcript_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get transcript with related media information (JOIN query)"""
         try:
             client = await self._get_client()
             response = await client.table('transcripts')\
-                .select("*, videos(*)")\
+                .select("*, media(*)")\
                 .eq("id", self._uuid_str(transcript_id))\
                 .is_("deleted_at", "null")\
                 .maybe_single()\
                 .execute()
             return response.data if response and response.data else None
         except Exception as e:
-            raise DatabaseError(f"Failed to get transcript with video: {str(e)}") from e
+            raise DatabaseError(f"Failed to get transcript with media: {str(e)}") from e
+
+    # Backward compatibility method
+    async def get_transcript_with_video(self, transcript_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get transcript with related video information (backward compatibility)"""
+        return await self.get_transcript_with_media(transcript_id)
 
     # Client methods
     async def create_client_with_session(self, name: str, user_id: UUID, access_token: str, refresh_token: str) -> Client:
@@ -653,18 +668,23 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to remove client user: {str(e)}") from e
 
-    async def get_client_videos(self, client_id: UUID) -> List[Video]:
-        """Get videos for a client"""
+    async def get_client_media(self, client_id: UUID) -> List[Media]:
+        """Get all media for a client"""
         try:
             client = await self._get_client()
-            response = await client.table('videos')\
+            response = await client.table('media')\
                 .select("*")\
                 .eq("client_id", str(client_id))\
                 .is_("deleted_at", "null")\
                 .execute()
-            return [Video(**video) for video in response.data]
+            return [Media(**media) for media in response.data]
         except Exception as e:
-            raise DatabaseError(f"Failed to get client videos: {str(e)}") from e
+            raise DatabaseError(f"Failed to get client media: {str(e)}") from e
+
+    # Backward compatibility method  
+    async def get_client_videos(self, client_id: UUID) -> List[Video]:
+        """Get videos for a client (backward compatibility)"""
+        return await self.get_client_media(client_id)
 
     # File upload methods
     async def upload_file_with_smart_routing(

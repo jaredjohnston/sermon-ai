@@ -158,21 +158,21 @@ class TeamMember(TeamMemberBase):
     user_id: UUID
     created_at: datetime
 
-class VideoBase(BaseModel):
-    """Base video model"""
+class MediaBase(BaseModel):
+    """Base media model - supports video, audio, and documents"""
     filename: str = Field(..., min_length=1, max_length=255)
-    content_type: str = Field(..., pattern=r'^(video|audio)/[\w-]+$')
+    content_type: str = Field(..., pattern=r'^(video|audio|text|application)/[\w\.-]+$')
     size_bytes: int = Field(..., gt=0)
     client_id: UUID
     storage_path: str = Field(..., min_length=1, max_length=512)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-class VideoCreate(VideoBase):
-    """Video creation model"""
+class MediaCreate(MediaBase):
+    """Media creation model"""
     pass
 
-class Video(VideoBase):
-    """Video model with ID and timestamps"""
+class Media(MediaBase):
+    """Media model with ID and timestamps"""
     id: UUID
     created_at: datetime
     created_by: UUID
@@ -180,6 +180,11 @@ class Video(VideoBase):
     updated_by: UUID
     deleted_at: Optional[datetime] = None
     deleted_by: Optional[UUID] = None
+
+# Backward compatibility aliases
+VideoBase = MediaBase
+VideoCreate = MediaCreate  
+Video = Media
 
 class SubscriptionStatus(str, Enum):
     """Client subscription status"""

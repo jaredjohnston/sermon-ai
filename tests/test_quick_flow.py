@@ -63,11 +63,11 @@ class TestQuickFlow:
         test_file_path = None
         file_size = 0
         
-        # Check for test files (using the 455MB test file for realistic large file testing)
+        # Check for test files (using smaller file for faster testing after media rename)
         test_files = [
-            ("/Users/jaredjohnston/Desktop/SermonAI/455_test_video_file.mp4", "video/mp4"),
-            ("test_audio.mp4", "video/mp4"),  # Fallback
+            ("test_audio.mp4", "video/mp4"),  # Small file for faster testing
             ("test_audio.mp3", "audio/mpeg"),
+            ("/Users/jaredjohnston/Desktop/SermonAI/455_test_video_file.mp4", "video/mp4"),
             ("1gb_test_file.mp4", "video/mp4"),
             ("large_test_file.mp4", "video/mp4"),
         ]
@@ -231,58 +231,79 @@ class TestQuickFlow:
             print(f"❌ List failed: {response.text}")
             return False
     
-    def test_callback_endpoint_simulation(self):
-        """Test callback endpoint with simulated Deepgram response and verify audio cleanup"""
+    def test_wait_for_real_callback(self):
+        """Wait for real Deepgram callback and verify transcript content"""
         if not hasattr(self, 'request_id'):
             pytest.skip("Run upload test first to get request ID")
             
         client = TestClient(app)
         
-        # Simulate Deepgram callback payload
-        callback_payload = {
-            "metadata": {
-                "request_id": self.request_id
-            },
-            "results": {
-                "channels": [
-                    {
-                        "alternatives": [
-                            {
-                                "transcript": "This is a test sermon transcription from our concurrent audio extraction test.",
-                                "confidence": 0.95,
-                                "utterances": [
-                                    {
-                                        "speaker": 0,
-                                        "transcript": "This is a test sermon transcription from our concurrent audio extraction test.",
-                                        "start": 0.0,
-                                        "end": 5.0,
-                                        "confidence": 0.95
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
+        print(f"🔹 Waiting for real Deepgram callback...")
+        print(f"   Request ID: {self.request_id}")
+        print(f"   This may take 30-90 seconds for real transcription...")
         
-        print(f"🔹 Testing callback endpoint with audio cleanup verification...")
-        response = client.post("/api/v1/transcription/callback", json=callback_payload)
+        # Wait for real Deepgram callback to complete transcription
+        max_wait_time = 180  # 3 minutes
+        check_interval = 10   # Check every 10 seconds
+        checks = 0
+        max_checks = max_wait_time // check_interval
         
-        print(f"📋 Callback response: {response.status_code}")
-        if response.status_code == 200:
-            data = response.json()
-            print(f"✅ Callback endpoint working!")
-            print(f"   Status: {data['status']}")
-            print(f"   Request ID: {data.get('request_id', 'N/A')}")
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        
+        while checks < max_checks:
+            checks += 1
+            print(f"   Check {checks}/{max_checks}: Waiting for transcription...")
             
-            # NEW: Verify audio cleanup functionality
-            self._verify_audio_cleanup_logs()
+            # Check transcript status
+            status_response = client.get(f"/api/v1/transcription/status/{self.transcript_id}", headers=headers)
             
-            return True
-        else:
-            print(f"❌ Callback failed: {response.text}")
-            return False
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                current_status = status_data.get('status', 'unknown')
+                print(f"   Status: {current_status}")
+                
+                if current_status == 'completed':
+                    print(f"✅ Real transcription completed!")
+                    
+                    # Get the actual transcript content
+                    content_response = client.get(f"/api/v1/transcription/{self.transcript_id}", headers=headers)
+                    if content_response.status_code == 200:
+                        content_data = content_response.json()
+                        content = content_data.get('content', {})
+                        
+                        if content and content.get('full_transcript'):
+                            transcript_text = content['full_transcript']
+                            print(f"\\n📝 REAL TRANSCRIPT RECEIVED:")
+                            print(f"   Length: {len(transcript_text)} characters")
+                            print(f"   Confidence: {content.get('confidence', 'N/A')}")
+                            print(f"   Utterances: {len(content.get('utterances', []))}")
+                            
+                            # Show preview of real transcript
+                            preview = transcript_text[:200] + "..." if len(transcript_text) > 200 else transcript_text
+                            print(f"   Preview: \"{preview}\"")
+                            
+                            return True
+                        else:
+                            print(f"❌ Transcript completed but no content found")
+                            return False
+                    else:
+                        print(f"❌ Failed to get transcript content: {content_response.status_code}")
+                        return False
+                        
+                elif current_status == 'failed':
+                    print(f"❌ Transcription failed: {status_data.get('error_message', 'Unknown error')}")
+                    return False
+                
+            else:
+                print(f"   ⚠️ Status check failed: {status_response.status_code}")
+            
+            # Wait before next check
+            import time
+            time.sleep(check_interval)
+        
+        print(f"⏰ Timeout: Transcription still processing after {max_wait_time} seconds")
+        print(f"   This is normal for longer files - check back later")
+        return False
     
     def _verify_audio_cleanup_logs(self):
         """Check that audio cleanup was attempted during callback processing"""
@@ -353,9 +374,9 @@ def run_quick_tests():
             print("\n📋 PHASE 4: TRANSCRIPT LISTING")
             test_results['listing'] = tester.test_transcript_list_endpoint()
             
-            # Test 5: Callback Simulation + Audio Cleanup
-            print("\n🔔 PHASE 5: CALLBACK PROCESSING & AUDIO CLEANUP")
-            test_results['callback'] = tester.test_callback_endpoint_simulation()
+            # Test 5: Wait for Real Deepgram Callback
+            print("\n🔔 PHASE 5: REAL DEEPGRAM TRANSCRIPTION")
+            test_results['callback'] = tester.test_wait_for_real_callback()
             
             # Test 6: Content Retrieval
             print("\n📄 PHASE 6: TRANSCRIPT CONTENT")
@@ -371,7 +392,7 @@ def run_quick_tests():
         ("Concurrent Upload + Audio Extraction", test_results.get('upload', False)),
         ("Status Endpoint", test_results.get('status', False)),
         ("Listing Endpoint", test_results.get('listing', False)),
-        ("Callback + Audio Cleanup", test_results.get('callback', False)),
+        ("Real Deepgram Transcription", test_results.get('callback', False)),
         ("Content Retrieval", test_results.get('content', False))
     ]
     

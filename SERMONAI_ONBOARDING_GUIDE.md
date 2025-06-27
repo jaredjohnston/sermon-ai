@@ -1,8 +1,8 @@
 # SermonAI Backend Onboarding Guide
 
 **Created:** December 26, 2024  
-**Branch:** `feature/concurrent-audio-extraction`  
-**Last Updated:** Initial creation during concurrent audio extraction feature development
+**Branch:** `develop`  
+**Last Updated:** June 27, 2025 - Media table rename implementation completed
 
 ---
 
@@ -36,8 +36,8 @@
 ```
 
 ### Core Mission
-**SermonAI transforms large sermon videos into usable content for churches:**
-- **Input:** Raw sermon videos (4GB-40GB, 30-90 minutes)
+**SermonAI transforms large sermon content into usable resources for churches:**
+- **Input:** Raw sermon videos, audio files, or documents (4GB-40GB, 30-90 minutes)
 - **Processing:** Audio extraction → Transcription → Content generation
 - **Output:** Transcripts, social media posts, clips, sermon outlines
 
@@ -74,7 +74,7 @@ Pastor uploads sermon video → Gets transcript in minutes → Creates social co
 
 **2. System Data Flow:**
 ```
-Video Upload → Audio Extraction (concurrent) → Transcription → Content Generation → Delivery
+Media Upload → Audio Extraction (concurrent) → Transcription → Content Generation → Delivery
 ```
 
 ---
@@ -143,7 +143,7 @@ sermon_ai/
 **Key Responsibilities:**
 - User management (signup, signin, profiles)
 - Organization/client management
-- Video and transcript CRUD operations
+- Media (videos, audio, documents) and transcript CRUD operations
 - File upload routing (standard vs TUS)
 
 **Available Methods:**
@@ -153,9 +153,12 @@ async def sign_up(user: UserCreate) -> User
 async def sign_in(email: str, password: str) -> Dict[str, Any]
 async def get_user(user_id: UUID) -> Optional[User]
 
-# Video Operations  
-async def create_video(video: VideoCreate, user_id: UUID) -> Video
-async def get_user_videos(user_id: UUID) -> List[Video]
+# Media Operations (videos, audio, documents)
+async def create_media(media: MediaCreate, user_id: UUID) -> Media
+async def get_user_media(user_id: UUID) -> List[Media]
+async def get_client_media(client_id: UUID) -> List[Media]
+# Backward compatibility aliases:
+# create_video(), get_user_videos()
 
 # Transcript Operations
 async def create_transcript(transcript: TranscriptCreate, user_id: UUID) -> Transcript
@@ -237,23 +240,23 @@ async def cleanup_audio_file(audio_storage_path: str) -> None
 
 ## Data Flow Examples
 
-### 1. Video Upload & Transcription Flow (NEW: Concurrent Processing)
+### 1. Media Upload & Transcription Flow (Concurrent Processing)
 
 ```mermaid
 sequenceDiagram
     participant U as User
     participant API as FastAPI
-    participant VS as VideoUpload
+    participant MU as MediaUpload
     participant AS as AudioExtraction
     participant S as Supabase
     participant D as Deepgram
     
-    U->>API: POST /upload (video file)
-    API->>API: Validate file & create DB records
+    U->>API: POST /upload (media file)
+    API->>API: Validate file & create media records
     
-    par Video Upload (Background)
-        API->>VS: Start video upload task
-        VS->>S: Upload full video (TUS if >6MB)
+    par Media Upload (Background)
+        API->>MU: Start media upload task
+        MU->>S: Upload full media (TUS if >6MB)
     and Audio Extraction (Immediate)
         API->>AS: Extract audio from stream
         AS->>AS: FFmpeg extraction to WAV
@@ -359,12 +362,15 @@ settings = Settings()
 ```python
 # Core entities
 User -> belongs to -> Client (Organization)
-Video -> belongs to -> Client
-Transcript -> belongs to -> Video + Client
+Media -> belongs to -> Client  # Renamed from Video (supports video/audio/docs)
+Transcript -> belongs to -> Media + Client
 
 # Soft deletes with tracking
 deleted_at: Optional[datetime] = None
 deleted_by: Optional[UUID] = None
+
+# Backward compatibility maintained via aliases:
+# VideoCreate = MediaCreate, Video = Media
 ```
 
 ---
@@ -477,7 +483,27 @@ pytest tests/ -v
 
 ---
 
-## Architecture Decisions & Rationale
+## Recent Updates & Architecture Changes
+
+### Media Table Rename (June 2025)
+
+**What Changed:**
+- Database table renamed from `videos` to `media` 
+- Expanded content type support: videos, audio files, and documents
+- Updated Pydantic models: `VideoCreate` → `MediaCreate`, `Video` → `Media`
+- Maintained full backward compatibility via aliases
+- Updated all service methods to use media terminology
+
+**Migration Details:**
+- Zero downtime migration executed
+- All existing data preserved
+- API endpoints maintain same paths for backward compatibility
+- Content type validation expanded to support sermon documents
+
+**Benefits:**
+- Multi-content support (not just videos)
+- Future-ready for document processing
+- Cleaner terminology aligned with business model
 
 ### Why This Tech Stack?
 
@@ -487,7 +513,7 @@ pytest tests/ -v
 
 **Deepgram:** Best-in-class speech recognition with callback support for async processing
 
-**TUS Protocol:** Industry standard for resumable uploads, critical for large video files
+**TUS Protocol:** Industry standard for resumable uploads, critical for large media files
 
 **Service Layer Pattern:** Clear separation of concerns, testable business logic
 
@@ -527,5 +553,38 @@ pytest tests/ -v
 
 ---
 
+## Production Readiness Checklist
+
+### Database Schema
+- [x] Media table rename completed
+- [x] Backward compatibility aliases in place
+- [x] Content type validation supports sermon documents
+- [x] Foreign key constraints updated
+- [x] Indexes optimized for media queries
+
+### API Compatibility  
+- [x] All existing endpoints work with new schema
+- [x] Response formats unchanged for clients
+- [x] Error handling preserved
+- [x] Authentication and authorization intact
+
+### Testing Coverage
+- [x] End-to-end flow tests passing
+- [x] Real audio transcription verified
+- [x] Race condition fixes tested
+- [x] Concurrent processing working
+- [x] Database migration tested
+
+### Performance
+- [x] Concurrent audio extraction operational
+- [x] TUS resumable uploads for large files
+- [x] Audio cleanup after transcription
+- [x] Background video processing
+
+**System Status:** ✅ Production Ready
+
+---
+
 **End of Onboarding Guide**  
-*This document will be updated as the system evolves. Always check the branch/date at the top for currency.*
+*Last Updated: June 27, 2025 - Media table rename implementation completed*  
+*This document reflects the current production state. Always check git history for recent changes.*

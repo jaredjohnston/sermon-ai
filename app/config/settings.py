@@ -32,7 +32,14 @@ class Settings(BaseSettings):
         "audio/mpeg3", "audio/x-mpeg-3", "audio/m4a",
     ]
     ALLOWED_VIDEO_TYPES: List[str] = ["video/mp4", "video/mpeg", "video/webm"]
-    ALLOWED_MEDIA_TYPES: List[str] = ALLOWED_AUDIO_TYPES + ALLOWED_VIDEO_TYPES
+    
+    ALLOWED_DOCUMENT_TYPES: List[str] = [
+        "text/plain", "text/markdown", "text/html",
+        "application/pdf", "application/msword", 
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/rtf"
+    ]
+    ALLOWED_MEDIA_TYPES: List[str] = ALLOWED_AUDIO_TYPES + ALLOWED_VIDEO_TYPES + ALLOWED_DOCUMENT_TYPES
     
     # OpenAI Settings
     DEFAULT_MODEL: str = "gpt-4-turbo-preview"

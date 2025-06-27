@@ -9,7 +9,7 @@ from app.services.validation_service import validation_service
 from app.services.audio_extraction_service import audio_extraction_service, AudioExtractionError
 from app.services.audio_cleanup_service import audio_cleanup_service
 from app.middleware.auth import get_current_user
-from app.models.schemas import User, VideoCreate, TranscriptCreate
+from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate
 from datetime import datetime, UTC, timedelta
 import json
 
@@ -102,9 +102,9 @@ async def transcribe_upload(
             # Create storage path using settings prefix
             storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/videos/{file.filename}"
             
-            # Create video record first
-            video = await supabase_service.create_video(
-                VideoCreate(
+            # Create media record first
+            video = await supabase_service.create_media(
+                MediaCreate(
                     filename=file.filename,
                     content_type=file.content_type,
                     size_bytes=file_size,
@@ -114,7 +114,7 @@ async def transcribe_upload(
                 ),
                 current_user.id
             )
-            logger.info(f"Video record created: {video.id}")
+            logger.info(f"Media record created: {video.id}")  # Keep 'video' var for backward compatibility
             
             # STEP 3: Sequential stream save, then concurrent processing
             logger.info(f"Starting concurrent video upload and audio extraction for {file_size_mb}MB file...")
@@ -127,9 +127,31 @@ async def transcribe_upload(
                 )
                 logger.info(f"Audio extracted and uploaded - starting transcription immediately")
                 
+                # STEP 5: Create transcript tracking record BEFORE starting transcription
+                # This prevents race condition where callback fires before record exists
+                transcript = await supabase_service.create_transcript(
+                    TranscriptCreate(
+                        video_id=video.id,
+                        client_id=client.id,
+                        status="processing",
+                        request_id=None,  # Will be updated after Deepgram call
+                        metadata={"audio_storage_path": audio_storage_path}  # Store for cleanup
+                    ),
+                    current_user.id
+                )
+                logger.info(f"Transcript record created: {transcript.id}")
+                
                 # Start transcription with audio immediately (don't wait for video upload)
                 result = await deepgram_service.transcribe_from_url(audio_signed_url)
                 logger.info(f"Transcription started with request_id: {result.get('request_id')}")
+                
+                # Update transcript record with request_id from Deepgram
+                transcript = await supabase_service.update_transcript(
+                    transcript.id,
+                    {"request_id": result.get("request_id")},
+                    current_user.id
+                )
+                logger.info(f"Transcript updated with request_id: {result.get('request_id')}")
                 
                 # Start video upload in background using the temp file
                 video_upload_task = asyncio.create_task(
@@ -152,19 +174,6 @@ async def transcribe_upload(
             
             # Video upload continues in background - we don't wait for it
             logger.info(f"Video upload continues in background while transcription processes...")
-            
-            # STEP 5: Create transcript tracking record with audio path for cleanup
-            transcript = await supabase_service.create_transcript(
-                TranscriptCreate(
-                    video_id=video.id,
-                    client_id=client.id,
-                    status="processing",
-                    request_id=result.get("request_id"),
-                    metadata={"audio_storage_path": audio_storage_path}  # Store for cleanup
-                ),
-                current_user.id
-            )
-            logger.info(f"Transcript record created: {transcript.id}")
             
             # SUCCESS: Return comprehensive status information
             return {
@@ -207,20 +216,20 @@ async def transcribe_upload(
 
 @router.get("/videos")
 async def list_videos(current_user: User = Depends(get_current_user)):
-    """List all videos for the current user's client"""
+    """List all media (videos, audio, documents) for the current user's client"""
     try:
         # Get user's client
         client = await supabase_service.get_user_client(current_user.id)
         if not client:
             return []
             
-        videos = await supabase_service.get_client_videos(client.id)
+        videos = await supabase_service.get_client_media(client.id)
         return videos
     except Exception as e:
-        logger.error(f"Error listing videos: {str(e)}")
+        logger.error(f"Error listing media: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list videos: {str(e)}"
+            detail=f"Failed to list media: {str(e)}"
         )
 
 @router.get("/status/{transcript_id}")
@@ -454,8 +463,8 @@ async def get_transcript(
                 detail="User must belong to a client to access transcripts"
             )
         
-        # Get transcript with video information using JOIN
-        transcript_data = await supabase_service.get_transcript_with_video(transcript_uuid)
+        # Get transcript with media information using JOIN
+        transcript_data = await supabase_service.get_transcript_with_media(transcript_uuid)
         if not transcript_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -469,8 +478,8 @@ async def get_transcript(
                 detail="Access denied: transcript belongs to different organization"
             )
         
-        # Extract video information
-        video_info = transcript_data.get("videos", {})
+        # Extract media information
+        video_info = transcript_data.get("media", {})
         
         # Format transcript content
         content = None
