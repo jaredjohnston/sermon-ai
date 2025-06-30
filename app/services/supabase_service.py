@@ -46,10 +46,28 @@ class SupabaseService:
     def __init__(self):
         self._anon_client: Optional[AsyncClient] = None
         self._service_client: Optional[AsyncClient] = None
+        self._current_loop = None
         self.logger = logging.getLogger(__name__)
+    
+    def _check_event_loop(self):
+        """Check if we're in a different event loop and reset clients if needed"""
+        try:
+            import asyncio
+            current_loop = asyncio.get_running_loop()
+            if self._current_loop != current_loop:
+                # Event loop has changed, reset clients
+                if self._anon_client:
+                    self._anon_client = None
+                if self._service_client:
+                    self._service_client = None
+                self._current_loop = current_loop
+        except RuntimeError:
+            # No running event loop
+            pass
     
     async def _get_anon_client(self) -> AsyncClient:
         """Get or create async Supabase client with anon key (for auth operations)"""
+        self._check_event_loop()
         if not self._anon_client:
             self._anon_client = await acreate_client(
                 settings.SUPABASE_URL,
@@ -59,6 +77,7 @@ class SupabaseService:
     
     async def _get_service_client(self) -> AsyncClient:
         """Get or create async Supabase client with service role (for admin operations)"""
+        self._check_event_loop()
         if not self._service_client:
             self._service_client = await acreate_client(
                 settings.SUPABASE_URL,
@@ -770,7 +789,7 @@ class SupabaseService:
             
             # Upload to Supabase storage
             client = await self._get_service_client()
-            response = client.storage.from_(bucket_name).upload(
+            response = await client.storage.from_(bucket_name).upload(
                 storage_path,
                 file_data,
                 file_options={"content-type": content_type}
@@ -780,7 +799,7 @@ class SupabaseService:
                 raise DatabaseError(f"Supabase upload error: {response.error}")
             
             # Generate public URL
-            public_url_response = client.storage.from_(bucket_name).get_public_url(storage_path)
+            public_url_response = await client.storage.from_(bucket_name).get_public_url(storage_path)
             return public_url_response
             
         except Exception as e:

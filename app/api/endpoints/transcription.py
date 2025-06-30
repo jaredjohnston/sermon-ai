@@ -8,6 +8,8 @@ from app.services.supabase_service import supabase_service
 from app.services.validation_service import validation_service
 from app.services.audio_extraction_service import audio_extraction_service, AudioExtractionError
 from app.services.audio_cleanup_service import audio_cleanup_service
+from app.services.file_type_service import file_type_service, FileCategory
+from app.services.audio_service import audio_service, AudioProcessingError
 from app.middleware.auth import get_current_user
 from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate
 from datetime import datetime, UTC, timedelta
@@ -95,6 +97,11 @@ async def transcribe_upload(
         file_size_mb = validation_result.file_info["size_mb"]
         logger.info(f"File validation passed: {validation_result.file_info}")
         
+        # STEP 1.5: Detect file type and determine processing requirements
+        file_category = file_type_service.detect_file_category(file.content_type)
+        processing_requirements = file_type_service.get_processing_requirements(file.content_type)
+        logger.info(f"File category detected: {file_category.value}, Processing type: {processing_requirements['processing_type']}")
+        
         try:
             # STEP 2: Create database records
             logger.info(f"Creating video record for {file.filename} ({file_size_mb}MB)")
@@ -116,94 +123,123 @@ async def transcribe_upload(
             )
             logger.info(f"Media record created: {video.id}")  # Keep 'video' var for backward compatibility
             
-            # STEP 3: Sequential stream save, then concurrent processing
-            logger.info(f"Starting concurrent video upload and audio extraction for {file_size_mb}MB file...")
-            
-            # STEP 4: Extract audio and get temp file for video upload
-            logger.info(f"Extracting audio for immediate transcription...")
-            try:
-                audio_storage_path, audio_signed_url, temp_video_path = await extract_and_upload_audio(
-                    file, client.id, str(video.id)
-                )
-                logger.info(f"Audio extracted and uploaded - starting transcription immediately")
-                
-                # STEP 5: Create transcript tracking record BEFORE starting transcription
-                # This prevents race condition where callback fires before record exists
-                transcript = await supabase_service.create_transcript(
-                    TranscriptCreate(
-                        video_id=video.id,
-                        client_id=client.id,
-                        status="processing",
-                        request_id=None,  # Will be updated after Deepgram call
-                        metadata={"audio_storage_path": audio_storage_path}  # Store for cleanup
-                    ),
-                    current_user.id
-                )
-                logger.info(f"Transcript record created: {transcript.id}")
-                
-                # Start transcription with audio immediately (don't wait for video upload)
-                result = await deepgram_service.transcribe_from_url(audio_signed_url)
-                logger.info(f"Transcription started with request_id: {result.get('request_id')}")
-                
-                # Update transcript record with request_id from Deepgram
-                transcript = await supabase_service.update_transcript(
-                    transcript.id,
-                    {"request_id": result.get("request_id")},
-                    current_user.id
-                )
-                logger.info(f"Transcript updated with request_id: {result.get('request_id')}")
-                
-                # Start video upload in background using the temp file
-                video_upload_task = asyncio.create_task(
-                    upload_video_from_temp_file(temp_video_path, storage_path, file_size, file.content_type),
-                    name="video_upload"
-                )
-                
-            except AudioExtractionError as e:
-                logger.error(f"Audio extraction failed: {str(e)}")
+            # STEP 3: Route to appropriate processing pipeline based on file type
+            if file_category == FileCategory.AUDIO:
+                logger.info(f"Processing audio file directly (no extraction needed) for {file_size_mb}MB file...")
+                try:
+                    # Direct audio processing - no extraction needed
+                    audio_storage_path, audio_signed_url = await audio_service.process_and_upload_audio(
+                        file, client.id, str(video.id)
+                    )
+                    logger.info(f"Audio file processed and uploaded directly")
+                    
+                except AudioProcessingError as e:
+                    logger.error(f"Audio processing failed: {str(e)}")
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Audio processing failed: {str(e)}"
+                    )
+                    
+            elif file_category == FileCategory.VIDEO:
+                logger.info(f"Processing video file with audio extraction for {file_size_mb}MB file...")
+                try:
+                    # Video processing - extract audio + background video upload
+                    audio_storage_path, audio_signed_url, temp_video_path = await extract_and_upload_audio(
+                        file, client.id, str(video.id)
+                    )
+                    logger.info(f"Audio extracted from video and uploaded")
+                    
+                    # Start video upload in background for video files
+                    video_upload_task = asyncio.create_task(
+                        upload_video_from_temp_file(temp_video_path, storage_path, file_size, file.content_type),
+                        name="video_upload"
+                    )
+                    
+                except AudioExtractionError as e:
+                    logger.error(f"Audio extraction failed: {str(e)}")
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Audio extraction failed: {str(e)}"
+                    )
+                    
+            else:
+                # Unsupported file type (shouldn't reach here due to validation)
+                logger.error(f"Unsupported file category: {file_category.value}")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Audio extraction failed: {str(e)}"
-                )
-            except Exception as e:
-                logger.error(f"Audio processing failed: {str(e)}")
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Audio processing failed: {str(e)}"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unsupported file type for transcription: {file_category.value}"
                 )
             
-            # Video upload continues in background - we don't wait for it
-            logger.info(f"Video upload continues in background while transcription processes...")
+            # STEP 4: Create transcript tracking record BEFORE starting transcription
+            # This prevents race condition where callback fires before record exists
+            transcript = await supabase_service.create_transcript(
+                TranscriptCreate(
+                    video_id=video.id,
+                    client_id=client.id,
+                    status="processing",
+                    request_id=None,  # Will be updated after Deepgram call
+                    metadata={"audio_storage_path": audio_storage_path}  # Store for cleanup
+                ),
+                current_user.id
+            )
+            logger.info(f"Transcript record created: {transcript.id}")
             
-            # SUCCESS: Return comprehensive status information
-            return {
-                "success": True,
-                "message": "Audio extracted and transcription started immediately. Video upload continues in background.",
-                "video_id": str(video.id),
-                "transcript_id": str(transcript.id),
-                "request_id": result.get("request_id"),
-                "status": "processing",
-                "file_info": {
-                    "filename": file.filename,
-                    "size_mb": file_size_mb,
-                    "content_type": file.content_type
-                },
-                "processing_info": {
-                    "audio_extracted": True,
-                    "transcription_started": True,
-                    "video_upload_status": "background_processing"
-                },
-                "next_steps": {
-                    "description": "Transcription processing from extracted audio (faster than full video)",
-                    "estimated_time": f"~{max(2, int(file_size_mb / 100))} minutes",  # Faster estimate for audio
-                    "callback_url": result.get("callback_url")
-                }
-            }
+            # Start transcription with audio immediately (don't wait for video upload)
+            result = await deepgram_service.transcribe_from_url(audio_signed_url)
+            logger.info(f"Transcription started with request_id: {result.get('request_id')}")
+            
+            # Update transcript record with request_id from Deepgram
+            transcript = await supabase_service.update_transcript(
+                transcript.id,
+                {"request_id": result.get("request_id")},
+                current_user.id
+            )
+            logger.info(f"Transcript updated with request_id: {result.get('request_id')}")
             
         except Exception as e:
-            # Make sure to reset file position if transcription fails
-            file.file.seek(0)
-            raise e
+            logger.error(f"Processing failed: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Processing failed: {str(e)}"
+            )
+        
+        # Generate appropriate success message based on file type
+        if file_category == FileCategory.AUDIO:
+            success_message = "Audio file processed and transcription started immediately."
+            processing_description = "Direct audio processing (no extraction needed)"
+        elif file_category == FileCategory.VIDEO:
+            success_message = "Audio extracted and transcription started immediately. Video upload continues in background."
+            processing_description = "Audio extraction from video with background video upload"
+        else:
+            success_message = "File processed and transcription started."
+            processing_description = "Unknown processing type"
+        
+        # SUCCESS: Return comprehensive status information
+        return {
+            "success": True,
+            "message": success_message,
+            "video_id": str(video.id),
+            "transcript_id": str(transcript.id),
+            "request_id": result.get("request_id"),
+            "status": "processing",
+            "file_info": {
+                "filename": file.filename,
+                "size_mb": file_size_mb,
+                "content_type": file.content_type
+            },
+            "processing_info": {
+                "file_category": file_category.value,
+                "processing_type": processing_requirements["processing_type"],
+                "audio_extraction_needed": processing_requirements["needs_audio_extraction"],
+                "video_upload_needed": processing_requirements["needs_video_upload"],
+                "transcription_started": True
+            },
+            "next_steps": {
+                "description": processing_description,
+                "estimated_time": f"~{max(2, int(file_size_mb / 100))} minutes",  # Faster estimate for audio
+                "callback_url": result.get("callback_url")
+            }
+        }
             
     except HTTPException as he:
         raise he

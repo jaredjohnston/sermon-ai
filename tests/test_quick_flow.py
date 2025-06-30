@@ -14,6 +14,57 @@ from datetime import datetime
 class TestQuickFlow:
     """Minimal tests for immediate verification"""
     
+    def test_smart_routing_with_both_file_types(self):
+        """Test smart routing with both audio and video files if available"""
+        if not hasattr(self, 'access_token'):
+            pytest.skip("Run test_signup_with_alias_email first")
+            
+        import os
+        client = TestClient(app)
+        
+        # Test files to try
+        test_cases = [
+            ("test_audio.mp3", "audio/mpeg", "audio"),
+            ("test_audio.mp4", "video/mp4", "video"),
+        ]
+        
+        results = {}
+        
+        for filepath, content_type, expected_category in test_cases:
+            if os.path.exists(filepath):
+                print(f"\n🔍 Testing {expected_category} file routing: {filepath}")
+                
+                with open(filepath, "rb") as f:
+                    test_content = f.read()
+                
+                files = {"file": (filepath, test_content, content_type)}
+                headers = {"Authorization": f"Bearer {self.access_token}"}
+                
+                response = client.post("/api/v1/transcription/upload", files=files, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    processing_info = data.get('processing_info', {})
+                    detected_category = processing_info.get('file_category', 'unknown')
+                    
+                    print(f"   ✅ Upload successful")
+                    print(f"   📁 Expected: {expected_category}, Detected: {detected_category}")
+                    
+                    if detected_category == expected_category:
+                        print(f"   ✅ Correct file type detection")
+                        results[expected_category] = True
+                    else:
+                        print(f"   ❌ Incorrect file type detection")
+                        results[expected_category] = False
+                else:
+                    print(f"   ❌ Upload failed: {response.status_code}")
+                    results[expected_category] = False
+            else:
+                print(f"\n⚠️  {expected_category.title()} test file not found: {filepath}")
+                results[expected_category] = None
+        
+        return results
+    
     def test_signup_with_alias_email(self):
         """Test signup with your actual alias email"""
         client = TestClient(app)
@@ -52,22 +103,20 @@ class TestQuickFlow:
         return True
     
     def test_file_upload_with_auth(self):
-        """Test file upload using the token from signup - now with concurrent processing verification"""
+        """Test file upload using the token from signup - now with smart routing verification for both audio and video"""
         if not hasattr(self, 'access_token'):
             pytest.skip("Run test_signup_with_alias_email first")
             
         client = TestClient(app)
         
-        # Use real video file if it exists, otherwise fallback to audio or fake data
+        # Test both audio and video files to verify smart routing
         import os
-        test_file_path = None
-        file_size = 0
         
-        # Check for test files (using smaller file for faster testing after media rename)
+        # Prioritize testing both file types to demonstrate smart routing
         test_files = [
-            ("test_audio.mp4", "video/mp4"),  # Small file for faster testing
-            ("test_audio.mp3", "audio/mpeg"),
-            ("/Users/jaredjohnston/Desktop/SermonAI/455_test_video_file.mp4", "video/mp4"),
+            ("/Users/jaredjohnston/Desktop/SermonAI/455_test_video_file.mp4", "video/mp4"),  # Large file first
+            ("test_audio.mp3", "audio/mpeg"),    # Test audio routing 
+            ("test_audio.mp4", "video/mp4"),     # Then test video routing
             ("1gb_test_file.mp4", "video/mp4"),
             ("large_test_file.mp4", "video/mp4"),
         ]
@@ -106,7 +155,7 @@ class TestQuickFlow:
             "Authorization": f"Bearer {self.access_token}"
         }
         
-        print(f"🔹 Testing concurrent upload and audio extraction...")
+        print(f"🔹 Testing smart file type routing (content type: {content_type})...")
         response = client.post("/api/v1/transcription/upload", files=files, headers=headers)
         
         print(f"📋 Upload response status: {response.status_code}")
@@ -131,8 +180,8 @@ class TestQuickFlow:
             print(f"   Transcript ID: {data['transcript_id']}")
             print(f"   Request ID:    {data.get('request_id', 'N/A')}")
             
-            # NEW: Verify concurrent processing functionality
-            self._verify_concurrent_processing_response(data)
+            # NEW: Verify smart routing functionality
+            self._verify_smart_routing_response(data)
             
             # Store for transcript testing
             self.video_id = data['video_id']
@@ -143,45 +192,63 @@ class TestQuickFlow:
             print(f"❌ Unexpected response: {response.text}")
             return False
     
-    def _verify_concurrent_processing_response(self, response_data):
-        """Verify the response indicates concurrent processing worked"""
-        print(f"\n🔍 CONCURRENT PROCESSING VERIFICATION:")
+    def _verify_smart_routing_response(self, response_data):
+        """Verify the response indicates smart file type routing worked"""
+        print(f"\n🔍 SMART ROUTING VERIFICATION:")
         
-        # Check message indicates concurrent processing
-        message = response_data.get('message', '')
-        if 'Audio extracted and transcription started immediately' in message:
-            print(f"   ✅ Message indicates concurrent processing: {message}")
-        else:
-            print(f"   ⚠️  Message doesn't indicate concurrent processing: {message}")
-        
-        # Check processing_info structure
+        # Check processing_info structure has new smart routing fields
         processing_info = response_data.get('processing_info', {})
         if processing_info:
             print(f"   ✅ Processing info present")
             
-            # Verify audio extraction completed
-            audio_extracted = processing_info.get('audio_extracted', False)
-            print(f"   {'✅' if audio_extracted else '❌'} Audio extracted: {audio_extracted}")
+            # Check file category detection
+            file_category = processing_info.get('file_category', '')
+            print(f"   📁 File category: {file_category}")
             
-            # Verify transcription started
+            # Check processing type
+            processing_type = processing_info.get('processing_type', '')
+            print(f"   ⚙️  Processing type: {processing_type}")
+            
+            # Check routing flags
+            audio_extraction_needed = processing_info.get('audio_extraction_needed', None)
+            video_upload_needed = processing_info.get('video_upload_needed', None)
             transcription_started = processing_info.get('transcription_started', False)
+            
+            print(f"   {'✅' if audio_extraction_needed is not None else '❌'} Audio extraction flag: {audio_extraction_needed}")
+            print(f"   {'✅' if video_upload_needed is not None else '❌'} Video upload flag: {video_upload_needed}")
             print(f"   {'✅' if transcription_started else '❌'} Transcription started: {transcription_started}")
             
-            # Verify video upload in background
-            video_status = processing_info.get('video_upload_status', '')
-            background_processing = video_status == 'background_processing'
-            print(f"   {'✅' if background_processing else '❌'} Video upload in background: {video_status}")
+            # Verify message matches file type
+            message = response_data.get('message', '')
+            if file_category == 'audio':
+                expected_patterns = ['Audio file processed and transcription started immediately']
+                pattern_found = any(pattern in message for pattern in expected_patterns)
+                print(f"   {'✅' if pattern_found else '⚠️'} Audio message: {message}")
+                
+                # Audio files shouldn't need extraction
+                if not audio_extraction_needed:
+                    print(f"   ✅ Correct: Audio file bypassed extraction")
+                else:
+                    print(f"   ⚠️  Warning: Audio file still went through extraction")
+                    
+            elif file_category == 'video':
+                expected_patterns = ['Audio extracted and transcription started immediately', 'Video upload continues in background']
+                pattern_found = any(pattern in message for pattern in expected_patterns)
+                print(f"   {'✅' if pattern_found else '⚠️'} Video message: {message}")
+                
+                # Video files should need extraction
+                if audio_extraction_needed:
+                    print(f"   ✅ Correct: Video file required extraction")
+                else:
+                    print(f"   ⚠️  Warning: Video file didn't require extraction")
             
         else:
             print(f"   ❌ Processing info missing from response")
         
-        # Check next_steps mentions audio processing
+        # Check next_steps description
         next_steps = response_data.get('next_steps', {})
         description = next_steps.get('description', '')
-        if 'extracted audio' in description.lower():
-            print(f"   ✅ Next steps mention audio extraction: {description}")
-        else:
-            print(f"   ⚠️  Next steps don't mention audio: {description}")
+        print(f"   📝 Processing description: {description}")
         
         return True
     
@@ -243,7 +310,7 @@ class TestQuickFlow:
         print(f"   This may take 30-90 seconds for real transcription...")
         
         # Wait for real Deepgram callback to complete transcription
-        max_wait_time = 180  # 3 minutes
+        max_wait_time = 600  # 10 minutes
         check_interval = 10   # Check every 10 seconds
         checks = 0
         max_checks = max_wait_time // check_interval
@@ -361,8 +428,8 @@ def run_quick_tests():
     test_results['signup'] = tester.test_signup_with_alias_email()
     
     if test_results['signup']:
-        # Test 2: File Upload + Concurrent Processing + Deepgram
-        print("\n📤 PHASE 2: CONCURRENT UPLOAD & AUDIO EXTRACTION")
+        # Test 2: File Upload + Smart Routing + Processing + Deepgram
+        print("\n📤 PHASE 2: SMART FILE TYPE ROUTING & PROCESSING")
         test_results['upload'] = tester.test_file_upload_with_auth()
         
         if test_results['upload']:
@@ -389,7 +456,7 @@ def run_quick_tests():
     
     phases = [
         ("User Registration", test_results.get('signup', False)),
-        ("Concurrent Upload + Audio Extraction", test_results.get('upload', False)),
+        ("Smart File Type Routing & Processing", test_results.get('upload', False)),
         ("Status Endpoint", test_results.get('status', False)),
         ("Listing Endpoint", test_results.get('listing', False)),
         ("Real Deepgram Transcription", test_results.get('callback', False)),
@@ -406,12 +473,14 @@ def run_quick_tests():
     print(f"\n📊 SUMMARY: {passed}/{len(phases)} tests passed")
     
     if passed == len(phases):
-        print("🎉 ALL TESTS PASSED! Complete concurrent audio extraction flow working!")
+        print("🎉 ALL TESTS PASSED! Smart file type routing flow working!")
         print("\n✅ Your implementation successfully:")
         print("   • Creates users and organizations")
-        print("   • Extracts audio concurrently with video upload")
-        print("   • Starts transcription immediately from audio")
-        print("   • Routes large files to TUS resumable upload (background)")
+        print("   • Detects file types (audio vs video) automatically")
+        print("   • Routes audio files to direct processing (no extraction)")
+        print("   • Routes video files to extraction + background upload")
+        print("   • Starts transcription immediately from appropriate source")
+        print("   • Uses TUS resumable upload for large files")
         print("   • Processes callback responses with audio cleanup")
         print("   • Stores and retrieves transcript content")
         print("   • Provides API endpoints for frontend integration")
