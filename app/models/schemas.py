@@ -287,4 +287,110 @@ class SignUpResponse(BaseModel):
     client: Client
     role: UserRole = UserRole.owner
     access_token: str
-    token_type: str = "bearer" 
+
+# Content Template Models
+class TemplateStatus(str, Enum):
+    """Status of content templates"""
+    draft = "draft"
+    active = "active"
+    archived = "archived"
+
+class ContentTemplateBase(BaseModel):
+    """Base content template model"""
+    name: str = Field(..., min_length=2, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    content_type_name: str = Field(..., min_length=2, max_length=50)
+    structured_prompt: str = Field(..., min_length=50, max_length=5000)
+    example_content: List[str] = Field(default_factory=list)
+    status: TemplateStatus = Field(default=TemplateStatus.active)
+    model_settings: Dict[str, Any] = Field(default_factory=lambda: {
+        "temperature": 0.7,
+        "max_tokens": 2000,
+        "model": "gpt-4o"
+    })
+
+class ContentTemplateCreate(ContentTemplateBase):
+    """Content template creation model"""
+    client_id: UUID
+
+class ContentTemplate(ContentTemplateBase):
+    """Content template model with ID and timestamps"""
+    id: UUID
+    client_id: UUID
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+class ContentTemplateUpdate(BaseModel):
+    """Content template update model"""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    structured_prompt: Optional[str] = Field(None, min_length=50, max_length=5000)
+    example_content: Optional[List[str]] = None
+    status: Optional[TemplateStatus] = None
+    model_settings: Optional[Dict[str, Any]] = None
+
+# Generated Content Models
+class GeneratedContentBase(BaseModel):
+    """Base generated content model"""
+    transcript_id: UUID
+    template_id: UUID
+    content: str
+    content_metadata: Dict[str, Any] = Field(default_factory=dict)
+    generation_settings: Dict[str, Any] = Field(default_factory=dict)
+    generation_cost_cents: Optional[int] = None
+    generation_duration_ms: Optional[int] = None
+    user_edits_count: int = Field(default=0)
+    last_edited_at: Optional[datetime] = None
+
+class GeneratedContentCreate(GeneratedContentBase):
+    """Generated content creation model"""
+    client_id: UUID
+
+class GeneratedContentModel(GeneratedContentBase):
+    """Generated content model with ID and timestamps"""
+    id: UUID
+    client_id: UUID
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+
+class GeneratedContentUpdate(BaseModel):
+    """Generated content update model"""
+    content: Optional[str] = None
+    user_edits_count: Optional[int] = None
+    last_edited_at: Optional[datetime] = None
+
+# Content Generation Request/Response Models
+class ContentGenerationRequest(BaseModel):
+    """Request to generate content from transcript"""
+    transcript_id: UUID
+    template_id: UUID
+    custom_instructions: Optional[str] = Field(None, max_length=1000)
+
+class ContentGenerationResponse(BaseModel):
+    """Response from content generation"""
+    id: UUID
+    content: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    generation_cost_cents: Optional[int] = None
+    generation_duration_ms: Optional[int] = None
+
+# Template Pattern Extraction Models
+class TemplateExtractionRequest(BaseModel):
+    """Request to extract patterns from examples"""
+    content_type_name: str = Field(..., min_length=2, max_length=50)
+    examples: List[str] = Field(..., min_items=1, max_items=5)
+    description: Optional[str] = Field(None, max_length=500)
+
+class TemplateExtractionResponse(BaseModel):
+    """Response from template pattern extraction"""
+    structured_prompt: str
+    confidence_score: float = Field(..., ge=0.0, le=1.0)
+    extracted_patterns: Dict[str, Any] = Field(default_factory=dict) 
