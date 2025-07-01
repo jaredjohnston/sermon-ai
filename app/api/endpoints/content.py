@@ -10,7 +10,7 @@ from app.models.schemas import (
 )
 from app.services.content_service import content_service
 from app.services.template_service import template_service, TemplateServiceError
-from app.middleware.auth import get_current_user
+from app.middleware.auth import get_current_user, get_auth_context, AuthContext
 from app.models.schemas import User
 
 logger = logging.getLogger(__name__)
@@ -52,13 +52,15 @@ async def generate_content(request: ContentGenerationRequest):
 @router.post("/templates", response_model=ContentTemplate, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template: ContentTemplateCreate,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Create a new content template"""
     try:
         logger.info(f"Creating content template '{template.name}' for client {template.client_id}")
         
-        created_template = await template_service.create_template(template, current_user.id)
+        created_template = await template_service.create_template(
+            template, auth.user.id, auth.access_token
+        )
         
         logger.info(f"Content template created successfully: {created_template.id}")
         return created_template
@@ -80,14 +82,15 @@ async def create_template(
 async def list_templates(
     status_filter: Optional[TemplateStatus] = None,
     content_type_name: Optional[str] = None,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """List all content templates for the user's organization"""
     try:
-        logger.info(f"Listing templates for user {current_user.id}")
+        logger.info(f"Listing templates for user {auth.user.id}")
         
         templates = await template_service.list_templates(
-            current_user.id, 
+            auth.user.id, 
+            auth.access_token,
             status=status_filter,
             content_type_name=content_type_name
         )
@@ -111,13 +114,15 @@ async def list_templates(
 @router.get("/templates/{template_id}", response_model=ContentTemplate)
 async def get_template(
     template_id: UUID,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Get a specific content template by ID"""
     try:
-        logger.info(f"Getting template {template_id} for user {current_user.id}")
+        logger.info(f"Getting template {template_id} for user {auth.user.id}")
         
-        template = await template_service.get_template(template_id, current_user.id)
+        template = await template_service.get_template(
+            template_id, auth.user.id, auth.access_token
+        )
         
         if not template:
             raise HTTPException(
@@ -146,14 +151,14 @@ async def get_template(
 async def update_template(
     template_id: UUID,
     updates: ContentTemplateUpdate,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Update a content template"""
     try:
-        logger.info(f"Updating template {template_id} for user {current_user.id}")
+        logger.info(f"Updating template {template_id} for user {auth.user.id}")
         
         updated_template = await template_service.update_template(
-            template_id, updates, current_user.id
+            template_id, updates, auth.user.id, auth.access_token
         )
         
         logger.info(f"Template updated successfully: {template_id}")
@@ -175,13 +180,15 @@ async def update_template(
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: UUID,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Delete a content template (soft delete)"""
     try:
-        logger.info(f"Deleting template {template_id} for user {current_user.id}")
+        logger.info(f"Deleting template {template_id} for user {auth.user.id}")
         
-        success = await template_service.delete_template(template_id, current_user.id)
+        success = await template_service.delete_template(
+            template_id, auth.user.id, auth.access_token
+        )
         
         if not success:
             raise HTTPException(
@@ -211,14 +218,14 @@ async def delete_template(
 @router.get("/transcripts/{transcript_id}/generated", response_model=List[GeneratedContentModel])
 async def list_generated_content_for_transcript(
     transcript_id: UUID,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """List all generated content for a specific transcript"""
     try:
         logger.info(f"Listing generated content for transcript {transcript_id}")
         
         content_list = await template_service.list_generated_content_by_transcript(
-            transcript_id, current_user.id
+            transcript_id, auth.user.id, auth.access_token
         )
         
         logger.info(f"Found {len(content_list)} generated content items")
@@ -240,13 +247,15 @@ async def list_generated_content_for_transcript(
 @router.get("/generated/{content_id}", response_model=GeneratedContentModel)
 async def get_generated_content(
     content_id: UUID,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Get specific generated content by ID"""
     try:
         logger.info(f"Getting generated content {content_id}")
         
-        content = await template_service.get_generated_content(content_id, current_user.id)
+        content = await template_service.get_generated_content(
+            content_id, auth.user.id, auth.access_token
+        )
         
         if not content:
             raise HTTPException(
@@ -277,7 +286,7 @@ async def get_generated_content(
 @router.post("/templates/extract", response_model=TemplateExtractionResponse)
 async def extract_template_patterns(
     request: TemplateExtractionRequest,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Extract content patterns from examples to create structured prompts"""
     # TODO: Implement in Phase 2 with pattern_extraction_service

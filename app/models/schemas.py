@@ -297,6 +297,8 @@ class TemplateStatus(str, Enum):
 
 class ContentTemplateBase(BaseModel):
     """Base content template model"""
+    model_config = {"protected_namespaces": ()}
+    
     name: str = Field(..., min_length=2, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     content_type_name: str = Field(..., min_length=2, max_length=50)
@@ -326,6 +328,8 @@ class ContentTemplate(ContentTemplateBase):
 
 class ContentTemplateUpdate(BaseModel):
     """Content template update model"""
+    model_config = {"protected_namespaces": ()}
+    
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     structured_prompt: Optional[str] = Field(None, min_length=50, max_length=5000)

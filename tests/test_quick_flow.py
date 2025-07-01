@@ -114,9 +114,9 @@ class TestQuickFlow:
         
         # Prioritize testing both file types to demonstrate smart routing
         test_files = [
-            ("/Users/jaredjohnston/Desktop/SermonAI/455_test_video_file.mp4", "video/mp4"),  # Large file first
+            ("test_audio.mp4", "video/mp4"),     # Small test file first
             ("test_audio.mp3", "audio/mpeg"),    # Test audio routing 
-            ("test_audio.mp4", "video/mp4"),     # Then test video routing
+            ("/Users/jaredjohnston/Desktop/SermonAI/455_test_video_file.mp4", "video/mp4"),  # Large file last
             ("1gb_test_file.mp4", "video/mp4"),
             ("large_test_file.mp4", "video/mp4"),
         ]

@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.models.schemas import User
-from app.middleware.auth import get_current_user
+from app.middleware.auth import get_current_user, get_auth_context, AuthContext
 from app.services.supabase_service import supabase_service
 from uuid import UUID
 
@@ -38,10 +38,10 @@ async def create_client(
         )
 
 @router.get("/users")
-async def list_client_users(current_user: User = Depends(get_current_user)):
+async def list_client_users(auth: AuthContext = Depends(get_auth_context)):
     """List all users in the current user's client"""
     try:
-        users = await supabase_service.get_client_users(current_user.id)
+        users = await supabase_service.get_client_users(auth.user.id, auth.access_token)
         return users
     except Exception as e:
         logger.error(f"Error listing client users: {str(e)}")
@@ -74,13 +74,14 @@ async def add_client_user(
 @router.delete("/users/{user_id}")
 async def remove_client_user(
     user_id: UUID,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Remove a user from the current client"""
     try:
         await supabase_service.remove_client_user(
             user_id=user_id,
-            removed_by=current_user.id
+            removed_by=auth.user.id,
+            access_token=auth.access_token
         )
         return {"status": "success", "message": "User removed from client"}
     except Exception as e:

@@ -10,7 +10,7 @@ from app.services.audio_extraction_service import audio_extraction_service, Audi
 from app.services.audio_cleanup_service import audio_cleanup_service
 from app.services.file_type_service import file_type_service, FileCategory
 from app.services.audio_service import audio_service, AudioProcessingError
-from app.middleware.auth import get_current_user
+from app.middleware.auth import get_current_user, get_auth_context, AuthContext
 from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate
 from datetime import datetime, UTC, timedelta
 import json
@@ -67,17 +67,17 @@ async def extract_and_upload_audio(file: UploadFile, client_id: str, video_id: s
 async def transcribe_upload(
     request: Request,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """
     Transcribe uploaded audio/video file using Deepgram API
     Requires authentication
     """
     try:
-        logger.info(f"Received transcription request for file: {file.filename} from user: {current_user.email}")
+        logger.info(f"Received transcription request for file: {file.filename} from user: {auth.user.email}")
         
         # Get user's client
-        client = await supabase_service.get_user_client(current_user.id)
+        client = await supabase_service.get_user_client(auth.user.id)
         if not client:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,7 +119,7 @@ async def transcribe_upload(
                     client_id=client.id,
                     metadata=validation_result.file_info  # Store validation results
                 ),
-                current_user.id
+                auth.user.id
             )
             logger.info(f"Media record created: {video.id}")  # Keep 'video' var for backward compatibility
             
@@ -180,7 +180,8 @@ async def transcribe_upload(
                     request_id=None,  # Will be updated after Deepgram call
                     metadata={"audio_storage_path": audio_storage_path}  # Store for cleanup
                 ),
-                current_user.id
+                auth.user.id,
+                auth.access_token
             )
             logger.info(f"Transcript record created: {transcript.id}")
             
@@ -192,7 +193,8 @@ async def transcribe_upload(
             transcript = await supabase_service.update_transcript(
                 transcript.id,
                 {"request_id": result.get("request_id")},
-                current_user.id
+                auth.user.id,
+                auth.access_token
             )
             logger.info(f"Transcript updated with request_id: {result.get('request_id')}")
             
@@ -251,15 +253,15 @@ async def transcribe_upload(
         )
 
 @router.get("/videos")
-async def list_videos(current_user: User = Depends(get_current_user)):
+async def list_videos(auth: AuthContext = Depends(get_auth_context)):
     """List all media (videos, audio, documents) for the current user's client"""
     try:
         # Get user's client
-        client = await supabase_service.get_user_client(current_user.id)
+        client = await supabase_service.get_user_client(auth.user.id)
         if not client:
             return []
             
-        videos = await supabase_service.get_client_media(client.id)
+        videos = await supabase_service.get_client_media(client.id, auth.access_token)
         return videos
     except Exception as e:
         logger.error(f"Error listing media: {str(e)}")
@@ -271,7 +273,7 @@ async def list_videos(current_user: User = Depends(get_current_user)):
 @router.get("/status/{transcript_id}")
 async def get_transcription_status(
     transcript_id: str,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Get the current status of a transcription job"""
     try:
@@ -279,7 +281,7 @@ async def get_transcription_status(
         transcript_uuid = UUID(transcript_id)
         
         # Get user's client for authorization
-        client = await supabase_service.get_user_client(current_user.id)
+        client = await supabase_service.get_user_client(auth.user.id)
         if not client:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -287,7 +289,7 @@ async def get_transcription_status(
             )
         
         # Get transcript
-        transcript = await supabase_service.get_transcript(transcript_uuid)
+        transcript = await supabase_service.get_transcript(transcript_uuid, auth.access_token)
         if not transcript:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -337,7 +339,7 @@ async def get_transcription_status(
 
 @router.get("/")
 async def list_transcripts(
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth_context),
     limit: int = 20,
     offset: int = 0,
     status_filter: str = None
@@ -365,7 +367,7 @@ async def list_transcripts(
             )
         
         # Get user's client for authorization
-        client = await supabase_service.get_user_client(current_user.id)
+        client = await supabase_service.get_user_client(auth.user.id)
         if not client:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -373,7 +375,7 @@ async def list_transcripts(
             )
         
         # For now, get all user transcripts (we'll add pagination to service layer later)
-        user_transcripts = await supabase_service.get_user_transcripts(current_user.id)
+        user_transcripts = await supabase_service.get_user_transcripts(auth.user.id, auth.access_token)
         
         # Filter by client (extra security layer)
         client_transcripts = [t for t in user_transcripts if t.client_id == client.id]
@@ -425,7 +427,7 @@ async def list_transcripts(
 @router.get("/video/{video_id}")
 async def get_video_transcript(
     video_id: str,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Get transcript for a specific video"""
     try:
@@ -433,7 +435,7 @@ async def get_video_transcript(
         video_uuid = UUID(video_id)
         
         # Get user's client for authorization
-        client = await supabase_service.get_user_client(current_user.id)
+        client = await supabase_service.get_user_client(auth.user.id)
         if not client:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -441,7 +443,7 @@ async def get_video_transcript(
             )
         
         # Get transcript for the video
-        transcript = await supabase_service.get_video_transcript(video_uuid)
+        transcript = await supabase_service.get_video_transcript(video_uuid, auth.access_token)
         if not transcript:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -484,7 +486,7 @@ async def get_video_transcript(
 @router.get("/{transcript_id}")
 async def get_transcript(
     transcript_id: str,
-    current_user: User = Depends(get_current_user)
+    auth: AuthContext = Depends(get_auth_context)
 ):
     """Get full transcript content with video information"""
     try:
@@ -492,7 +494,7 @@ async def get_transcript(
         transcript_uuid = UUID(transcript_id)
         
         # Get user's client for authorization
-        client = await supabase_service.get_user_client(current_user.id)
+        client = await supabase_service.get_user_client(auth.user.id)
         if not client:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -500,7 +502,7 @@ async def get_transcript(
             )
         
         # Get transcript with media information using JOIN
-        transcript_data = await supabase_service.get_transcript_with_media(transcript_uuid)
+        transcript_data = await supabase_service.get_transcript_with_media(transcript_uuid, auth.access_token)
         if not transcript_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -728,7 +730,7 @@ async def transcription_callback(request: Request):
                         "error_message": error_message
                     }
                     
-                    updated_transcript = await supabase_service.update_transcript(transcript.id, update_data, transcript.created_by)
+                    updated_transcript = await supabase_service.update_transcript_system(transcript.id, update_data, transcript.created_by)
                     if updated_transcript:
                         logger.info(f"✅ Transcript updated successfully - Status: {new_status}")
                         
@@ -749,7 +751,7 @@ async def transcription_callback(request: Request):
                                         updated_metadata = metadata.copy()
                                         updated_metadata["audio_cleanup_scheduled"] = cleanup_date.isoformat()
                                         
-                                        await supabase_service.update_transcript(
+                                        await supabase_service.update_transcript_system(
                                             transcript.id, 
                                             {"metadata": updated_metadata}, 
                                             transcript.created_by

@@ -4,11 +4,19 @@ from app.services.supabase_service import supabase_service
 from app.models.schemas import User
 import jwt
 from jwt.exceptions import InvalidTokenError
+from pydantic import BaseModel
+from typing import Optional
 
 security = HTTPBearer()
 
-async def verify_token(credentials: HTTPAuthorizationCredentials = None):
-    """Verify JWT token from Supabase"""
+class AuthContext(BaseModel):
+    """Authentication context with user and tokens"""
+    user: User
+    access_token: str
+    refresh_token: Optional[str] = None
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = None) -> AuthContext:
+    """Verify JWT token from Supabase and return auth context"""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -17,9 +25,9 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = None):
     
     try:
         # Verify token with Supabase public key
-        token = credentials.credentials
+        access_token = credentials.credentials
         payload = jwt.decode(
-            token,
+            access_token,
             options={"verify_signature": False}  # Supabase handles signature verification
         )
         
@@ -30,8 +38,13 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = None):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
             )
-            
-        return user
+        
+        # Return auth context with user and tokens
+        return AuthContext(
+            user=user,
+            access_token=access_token,
+            refresh_token=None  # We don't have refresh token from Bearer header
+        )
         
     except InvalidTokenError:
         raise HTTPException(
@@ -67,5 +80,10 @@ class AuthMiddleware:
             )
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
-    """Dependency to get current authenticated user"""
+    """Dependency to get current authenticated user (backward compatibility)"""
+    auth_context = await verify_token(credentials)
+    return auth_context.user
+
+async def get_auth_context(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthContext:
+    """Dependency to get current auth context with user and tokens"""
     return await verify_token(credentials) 

@@ -26,7 +26,9 @@ class TemplateService:
     async def create_template(
         self, 
         template: ContentTemplateCreate, 
-        user_id: UUID
+        user_id: UUID,
+        access_token: str,
+        refresh_token: str = None
     ) -> ContentTemplate:
         """Create a new content template"""
         try:
@@ -36,11 +38,12 @@ class TemplateService:
                 raise ValidationError("User does not belong to the specified client")
             
             # Check for duplicate template names within client
-            existing = await self.get_template_by_name(template.client_id, template.name)
+            existing = await self.get_template_by_name(template.client_id, template.name, access_token, refresh_token)
             if existing:
                 raise ValidationError(f"Template with name '{template.name}' already exists for this organization")
             
-            client = await supabase_service._get_service_client()
+            # Use user-authenticated client for audit trigger compatibility
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             template_data = {
                 "client_id": str(template.client_id),
@@ -50,9 +53,8 @@ class TemplateService:
                 "structured_prompt": template.structured_prompt,
                 "example_content": template.example_content,
                 "status": template.status.value,
-                "model_settings": template.model_settings,
-                "created_by": str(user_id),
-                "updated_by": str(user_id)
+                "model_settings": template.model_settings
+                # Audit fields handled automatically by database triggers
             }
             
             response = await client.table('content_templates').insert(template_data).execute()
@@ -66,10 +68,10 @@ class TemplateService:
             self.logger.error(f"Error creating content template: {str(e)}", exc_info=True)
             raise TemplateServiceError(f"Failed to create template: {str(e)}") from e
     
-    async def get_template(self, template_id: UUID, user_id: UUID) -> Optional[ContentTemplate]:
+    async def get_template(self, template_id: UUID, user_id: UUID, access_token: str, refresh_token: str = None) -> Optional[ContentTemplate]:
         """Get a content template by ID"""
         try:
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             # Get user's client to ensure access control
             user_client = await supabase_service.get_user_client(user_id)
@@ -96,11 +98,13 @@ class TemplateService:
     async def get_template_by_name(
         self, 
         client_id: UUID, 
-        name: str
+        name: str,
+        access_token: str,
+        refresh_token: str = None
     ) -> Optional[ContentTemplate]:
         """Get a content template by name within a client"""
         try:
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             response = await client.table('content_templates')\
                 .select("*")\
@@ -125,12 +129,14 @@ class TemplateService:
     async def list_templates(
         self, 
         user_id: UUID,
+        access_token: str,
+        refresh_token: str = None,
         status: Optional[TemplateStatus] = None,
         content_type_name: Optional[str] = None
     ) -> List[ContentTemplate]:
         """List all content templates for user's client"""
         try:
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             # Get user's client
             user_client = await supabase_service.get_user_client(user_id)
@@ -162,23 +168,26 @@ class TemplateService:
         self, 
         template_id: UUID, 
         updates: ContentTemplateUpdate, 
-        user_id: UUID
+        user_id: UUID,
+        access_token: str,
+        refresh_token: str = None
     ) -> ContentTemplate:
         """Update a content template"""
         try:
             # First verify the template exists and user has access
-            existing_template = await self.get_template(template_id, user_id)
+            existing_template = await self.get_template(template_id, user_id, access_token, refresh_token)
             if not existing_template:
                 raise NotFoundError(f"Template {template_id} not found")
             
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             # Build update data (only include non-None fields)
-            update_data = {"updated_by": str(user_id)}
+            # Audit fields handled automatically by database triggers
+            update_data = {}
             
             if updates.name is not None:
                 # Check for name conflicts
-                existing_by_name = await self.get_template_by_name(existing_template.client_id, updates.name)
+                existing_by_name = await self.get_template_by_name(existing_template.client_id, updates.name, access_token, refresh_token)
                 if existing_by_name and existing_by_name.id != template_id:
                     raise ValidationError(f"Template with name '{updates.name}' already exists")
                 update_data["name"] = updates.name
@@ -212,22 +221,21 @@ class TemplateService:
             self.logger.error(f"Error updating content template {template_id}: {str(e)}", exc_info=True)
             raise TemplateServiceError(f"Failed to update template: {str(e)}") from e
     
-    async def delete_template(self, template_id: UUID, user_id: UUID) -> bool:
+    async def delete_template(self, template_id: UUID, user_id: UUID, access_token: str, refresh_token: str = None) -> bool:
         """Soft delete a content template"""
         try:
             # Verify template exists and user has access
-            existing_template = await self.get_template(template_id, user_id)
+            existing_template = await self.get_template(template_id, user_id, access_token, refresh_token)
             if not existing_template:
                 raise NotFoundError(f"Template {template_id} not found")
             
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             # Soft delete by setting deleted_at timestamp
+            # Audit fields handled automatically by database triggers
             response = await client.table('content_templates')\
                 .update({
-                    "deleted_at": datetime.utcnow().isoformat(),
-                    "deleted_by": str(user_id),
-                    "updated_by": str(user_id)
+                    "deleted_at": datetime.utcnow().isoformat()
                 })\
                 .eq("id", str(template_id))\
                 .execute()
@@ -243,7 +251,9 @@ class TemplateService:
     async def create_generated_content(
         self, 
         content: GeneratedContentCreate, 
-        user_id: UUID
+        user_id: UUID,
+        access_token: str,
+        refresh_token: str = None
     ) -> GeneratedContentModel:
         """Create a new generated content record"""
         try:
@@ -253,11 +263,11 @@ class TemplateService:
                 raise ValidationError("User does not belong to the specified client")
             
             # Verify template belongs to same client
-            template = await self.get_template(content.template_id, user_id)
+            template = await self.get_template(content.template_id, user_id, access_token, refresh_token)
             if not template:
                 raise ValidationError("Template not found or access denied")
             
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             content_data = {
                 "client_id": str(content.client_id),
@@ -269,9 +279,8 @@ class TemplateService:
                 "generation_cost_cents": content.generation_cost_cents,
                 "generation_duration_ms": content.generation_duration_ms,
                 "user_edits_count": content.user_edits_count,
-                "last_edited_at": content.last_edited_at.isoformat() if content.last_edited_at else None,
-                "created_by": str(user_id),
-                "updated_by": str(user_id)
+                "last_edited_at": content.last_edited_at.isoformat() if content.last_edited_at else None
+                # Audit fields handled automatically by database triggers
             }
             
             response = await client.table('generated_content').insert(content_data).execute()
@@ -288,11 +297,13 @@ class TemplateService:
     async def get_generated_content(
         self, 
         content_id: UUID, 
-        user_id: UUID
+        user_id: UUID,
+        access_token: str,
+        refresh_token: str = None
     ) -> Optional[GeneratedContentModel]:
         """Get generated content by ID"""
         try:
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             # Get user's client for access control
             user_client = await supabase_service.get_user_client(user_id)
@@ -319,11 +330,13 @@ class TemplateService:
     async def list_generated_content_by_transcript(
         self, 
         transcript_id: UUID, 
-        user_id: UUID
+        user_id: UUID,
+        access_token: str,
+        refresh_token: str = None
     ) -> List[GeneratedContentModel]:
         """List all generated content for a specific transcript"""
         try:
-            client = await supabase_service._get_service_client()
+            client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
             
             # Get user's client for access control
             user_client = await supabase_service.get_user_client(user_id)

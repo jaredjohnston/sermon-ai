@@ -89,6 +89,19 @@ class SupabaseService:
         """Get default async Supabase client (service role for most operations)"""
         return await self._get_service_client()
     
+    async def create_user_authenticated_client(self, access_token: str, refresh_token: str = None) -> AsyncClient:
+        """Create user-authenticated client for operations requiring user context"""
+        client = await acreate_client(
+            settings.SUPABASE_URL,
+            settings.SUPABASE_ANON_KEY
+        )
+        if refresh_token:
+            await client.auth.set_session(access_token, refresh_token)
+        else:
+            # Set just the access token for operations
+            client.options.headers["Authorization"] = f"Bearer {access_token}"
+        return client
+    
     def _uuid_str(self, uuid_value: UUID) -> str:
         """Helper method to convert UUID to string consistently"""
         return str(uuid_value)
@@ -180,23 +193,19 @@ class SupabaseService:
             raise DatabaseError(f"Failed to complete profile: {str(e)}") from e
     
     async def create_organization(self, org_name: str, session) -> Client:
-        """Create organization using authenticated session - standard Supabase pattern"""
+        """Create organization using service role - system operation during signup"""
         try:
-            # Create client with user's session (standard pattern)
-            client = await acreate_client(
-                settings.SUPABASE_URL,
-                settings.SUPABASE_ANON_KEY
-            )
-            await client.auth.set_session(session.access_token, session.refresh_token)
+            # Use service role for organization creation (system operation)
+            client = await self._get_service_client()
             
-            # Create organization/client - audit fields handled by trigger using auth.uid()
+            # Create organization/client - audit fields handled by trigger with system user
             response = await client.table('clients').insert({
                 "name": org_name,
             }).execute()
             
             org = Client(**response.data[0])
             
-            # Link user to organization as owner
+            # Link user to organization as owner using service role
             await client.table('client_users').insert({
                 "client_id": str(org.id),
                 "user_id": session.user.id,
@@ -240,10 +249,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to create user profile: {str(e)}") from e
     
-    async def get_user_profile(self, user_id: UUID) -> Optional[UserProfile]:
-        """Get user profile by user_id"""
+    async def get_user_profile(self, user_id: UUID, access_token: str, refresh_token: str = None) -> Optional[UserProfile]:
+        """Get user profile by user_id using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('user_profiles')\
                 .select("*")\
                 .eq("user_id", str(user_id))\
@@ -254,12 +263,11 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get user profile: {str(e)}") from e
     
-    async def update_user_profile(self, user_id: UUID, updates: Dict[str, Any]) -> UserProfile:
-        """Update user profile"""
+    async def update_user_profile(self, user_id: UUID, updates: Dict[str, Any], access_token: str, refresh_token: str = None) -> UserProfile:
+        """Update user profile using user-authenticated client"""
         try:
-            client = await self._get_client()
-            # Always update the updated_by field
-            updates["updated_by"] = str(user_id)
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
+            # Remove manual audit field - handled by triggers with user context
             
             response = await client.table('user_profiles')\
                 .update(updates)\
@@ -270,10 +278,10 @@ class SupabaseService:
             raise DatabaseError(f"Failed to update user profile: {str(e)}") from e
     
     # Team methods
-    async def create_team(self, team: TeamCreate, user_id: UUID) -> Team:
-        """Create a new team"""
+    async def create_team(self, team: TeamCreate, user_id: UUID, access_token: str, refresh_token: str = None) -> Team:
+        """Create a new team using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('teams').insert({
                 "name": team.name,
             }).execute()
@@ -291,10 +299,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to create team: {str(e)}") from e
     
-    async def get_user_teams(self, user_id: UUID) -> List[Team]:
-        """Get teams for a user"""
+    async def get_user_teams(self, user_id: UUID, access_token: str, refresh_token: str = None) -> List[Team]:
+        """Get teams for a user using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('teams')\
                 .select("*")\
                 .eq("id", client.table('team_members')\
@@ -330,10 +338,10 @@ class SupabaseService:
         """Create a new video record (backward compatibility)"""
         return await self.create_media(video, user_id)
     
-    async def get_user_media(self, user_id: UUID) -> List[Media]:
-        """Get all media for a user"""
+    async def get_user_media(self, user_id: UUID, access_token: str, refresh_token: str = None) -> List[Media]:
+        """Get all media for a user using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('media')\
                 .select("*")\
                 .eq("user_id", str(user_id))\
@@ -343,15 +351,16 @@ class SupabaseService:
             raise DatabaseError(f"Failed to get user media: {str(e)}") from e
     
     # Backward compatibility method
-    async def get_user_videos(self, user_id: UUID) -> List[Video]:
+    async def get_user_videos(self, user_id: UUID, access_token: str, refresh_token: str = None) -> List[Video]:
         """Get videos for a user (backward compatibility)"""
-        return await self.get_user_media(user_id)
+        return await self.get_user_media(user_id, access_token, refresh_token)
     
     # Transcript methods
-    async def create_transcript(self, transcript: TranscriptCreate, user_id: UUID) -> Transcript:
-        """Create a new transcript"""
+    async def create_transcript(self, transcript: TranscriptCreate, user_id: UUID, access_token: str, refresh_token: str = None) -> Transcript:
+        """Create a new transcript using user-authenticated client"""
         try:
-            client = await self._get_service_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
+            # Audit fields handled automatically by triggers with user context
             response = await client.table('transcripts').insert({
                 "video_id": str(transcript.video_id),
                 "client_id": str(transcript.client_id),
@@ -360,19 +369,31 @@ class SupabaseService:
                 "raw_transcript": transcript.raw_transcript,
                 "processed_transcript": transcript.processed_transcript,
                 "error_message": transcript.error_message,
-                "request_id": transcript.request_id,
-                "created_by": str(user_id),
-                "updated_by": str(user_id)
+                "request_id": transcript.request_id
             }).execute()
             return Transcript(**response.data[0])
         except Exception as e:
             raise DatabaseError(f"Failed to create transcript: {str(e)}") from e
     
-    async def update_transcript(self, transcript_id: UUID, updates: Dict[str, Any], user_id: UUID) -> Transcript:
-        """Update a transcript"""
+    async def update_transcript(self, transcript_id: UUID, updates: Dict[str, Any], user_id: UUID, access_token: str, refresh_token: str = None) -> Transcript:
+        """Update a transcript using user-authenticated client"""
         try:
-            client = await self._get_client()
-            # Always update the updated_by field
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
+            # Audit fields handled automatically by triggers with user context
+            
+            response = await client.table('transcripts')\
+                .update(updates)\
+                .eq("id", str(transcript_id))\
+                .execute()
+            return Transcript(**response.data[0])
+        except Exception as e:
+            raise DatabaseError(f"Failed to update transcript: {str(e)}") from e
+    
+    async def update_transcript_system(self, transcript_id: UUID, updates: Dict[str, Any], user_id: UUID) -> Transcript:
+        """Update a transcript using service role (for system operations like webhooks)"""
+        try:
+            client = await self._get_service_client()
+            # Manually set audit fields for system operations
             updates["updated_by"] = str(user_id)
             
             # If setting deleted_at, also set deleted_by
@@ -385,7 +406,7 @@ class SupabaseService:
                 .execute()
             return Transcript(**response.data[0])
         except Exception as e:
-            raise DatabaseError(f"Failed to update transcript: {str(e)}") from e
+            raise DatabaseError(f"Failed to update transcript (system): {str(e)}") from e
 
     async def get_transcript_by_request_id(self, request_id: str) -> Optional[Transcript]:
         """Get a transcript by its Deepgram request ID"""
@@ -401,10 +422,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get transcript by request_id: {str(e)}") from e
 
-    async def get_client_transcripts(self, client_id: UUID) -> List[Transcript]:
-        """Get all transcripts for a client"""
+    async def get_client_transcripts(self, client_id: UUID, access_token: str, refresh_token: str = None) -> List[Transcript]:
+        """Get all transcripts for a client using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('transcripts')\
                 .select("*")\
                 .eq("client_id", str(client_id))\
@@ -414,10 +435,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get client transcripts: {str(e)}") from e
 
-    async def get_transcript(self, transcript_id: UUID) -> Optional[Transcript]:
-        """Get a single transcript by ID"""
+    async def get_transcript(self, transcript_id: UUID, access_token: str, refresh_token: str = None) -> Optional[Transcript]:
+        """Get a single transcript by ID using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('transcripts')\
                 .select("*")\
                 .eq("id", self._uuid_str(transcript_id))\
@@ -428,10 +449,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get transcript: {str(e)}") from e
 
-    async def get_user_transcripts(self, user_id: UUID) -> List[Transcript]:
-        """Get all transcripts for a user (filtered by their client)"""
+    async def get_user_transcripts(self, user_id: UUID, access_token: str, refresh_token: str = None) -> List[Transcript]:
+        """Get all transcripts for a user using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('transcripts')\
                 .select("*")\
                 .eq("created_by", str(user_id))\
@@ -442,10 +463,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get user transcripts: {str(e)}") from e
 
-    async def get_video_transcript(self, video_id: UUID) -> Optional[Transcript]:
-        """Get the transcript for a specific video"""
+    async def get_video_transcript(self, video_id: UUID, access_token: str, refresh_token: str = None) -> Optional[Transcript]:
+        """Get the transcript for a specific video using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('transcripts')\
                 .select("*")\
                 .eq("video_id", self._uuid_str(video_id))\
@@ -456,10 +477,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to get video transcript: {str(e)}") from e
 
-    async def get_transcript_with_media(self, transcript_id: UUID) -> Optional[Dict[str, Any]]:
-        """Get transcript with related media information (JOIN query)"""
+    async def get_transcript_with_media(self, transcript_id: UUID, access_token: str, refresh_token: str = None) -> Optional[Dict[str, Any]]:
+        """Get transcript with related media information using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('transcripts')\
                 .select("*, media(*)")\
                 .eq("id", self._uuid_str(transcript_id))\
@@ -606,10 +627,10 @@ class SupabaseService:
             
         return False
     
-    async def get_client_users(self, user_id: UUID) -> List[ClientUser]:
-        """Get all users in a client"""
+    async def get_client_users(self, user_id: UUID, access_token: str, refresh_token: str = None) -> List[ClientUser]:
+        """Get all users in a client using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             # First get user's client_id
             user_client = await self.get_user_client(user_id)
             if not user_client:
@@ -664,21 +685,19 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to add client user: {str(e)}") from e
     
-    async def remove_client_user(self, user_id: UUID, removed_by: UUID) -> None:
-        """Remove a user from a client (soft delete)"""
+    async def remove_client_user(self, user_id: UUID, removed_by: UUID, access_token: str, refresh_token: str = None) -> None:
+        """Remove a user from a client using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             # Get the client of the user removing
             user_client = await self.get_user_client(removed_by)
             if not user_client:
                 raise ValidationError("User is not associated with any client")
             
-            # Soft delete the user from the client
+            # Soft delete the user from the client - audit fields handled by triggers
             await client.table('client_users')\
                 .update({
-                    "deleted_at": "now()",
-                    "deleted_by": str(removed_by),
-                    "updated_by": str(removed_by)
+                    "deleted_at": "now()"
                 })\
                 .eq("client_id", str(user_client.id))\
                 .eq("user_id", str(user_id))\
@@ -687,10 +706,10 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to remove client user: {str(e)}") from e
 
-    async def get_client_media(self, client_id: UUID) -> List[Media]:
-        """Get all media for a client"""
+    async def get_client_media(self, client_id: UUID, access_token: str, refresh_token: str = None) -> List[Media]:
+        """Get all media for a client using user-authenticated client"""
         try:
-            client = await self._get_client()
+            client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('media')\
                 .select("*")\
                 .eq("client_id", str(client_id))\
@@ -701,9 +720,9 @@ class SupabaseService:
             raise DatabaseError(f"Failed to get client media: {str(e)}") from e
 
     # Backward compatibility method  
-    async def get_client_videos(self, client_id: UUID) -> List[Video]:
+    async def get_client_videos(self, client_id: UUID, access_token: str, refresh_token: str = None) -> List[Video]:
         """Get videos for a client (backward compatibility)"""
-        return await self.get_client_media(client_id)
+        return await self.get_client_media(client_id, access_token, refresh_token)
 
     # File upload methods
     async def upload_file_with_smart_routing(

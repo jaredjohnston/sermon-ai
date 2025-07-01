@@ -2,7 +2,7 @@
 
 **Created:** December 26, 2024  
 **Branch:** `develop`  
-**Last Updated:** June 27, 2025 - Media table rename implementation completed
+**Last Updated:** June 30, 2025 - Authentication & Authorization System documented, Supabase auth role strategy established
 
 ---
 
@@ -10,10 +10,11 @@
 1. [System Architecture Overview](#system-architecture-overview)
 2. [Codebase Structure](#codebase-structure)
 3. [Key Services Deep Dive](#key-services-deep-dive)
-4. [Data Flow Examples](#data-flow-examples)
-5. [Development Patterns](#development-patterns)
-6. [Testing Architecture](#testing-architecture)
-7. [Configuration & Environment](#configuration--environment)
+4. [Authentication & Authorization System](#authentication--authorization-system)
+5. [Data Flow Examples](#data-flow-examples)
+6. [Development Patterns](#development-patterns)
+7. [Testing Architecture](#testing-architecture)
+8. [Configuration & Environment](#configuration--environment)
 
 ---
 
@@ -235,6 +236,87 @@ async def cleanup_audio_file(audio_storage_path: str) -> None
 - Upload progress tracking
 - Resume interrupted uploads
 - Integration with Supabase storage
+
+---
+
+## Authentication & Authorization System
+
+### 🔐 System Overview
+
+SermonAI implements a **production-ready multi-tenant authentication system** with:
+- **Three-tier auth strategy** (Anon Key, Service Role, User-Authenticated)
+- **Row Level Security (RLS)** for database-level data isolation
+- **Comprehensive audit trails** with automatic triggers
+- **Client-based multi-tenancy** ensuring churches can't see each other's data
+
+### 🎯 Key Concepts (High Level)
+
+#### **Auth Role Strategy**
+```python
+# User operations (viewing their data, uploads, etc.)
+client = await self.create_user_authenticated_client(access_token, refresh_token)
+
+# System operations (webhooks, admin tasks, storage)
+client = await self._get_service_client()
+
+# Public operations (signup, signin)
+client = await self._get_anon_client()
+```
+
+#### **API Endpoint Pattern**
+```python
+@router.post("/endpoint")
+async def endpoint(auth: AuthContext = Depends(get_auth_context)):
+    # auth.user provides user info
+    # auth.access_token provides authentication context
+    return await service.method(auth.user.id, auth.access_token)
+```
+
+#### **Multi-Tenant Security**
+- **RLS policies** ensure users only see their organization's data
+- **Audit triggers** automatically track who created/modified what
+- **Client isolation** prevents cross-organization data access
+
+### 🛡️ Security Status: **PRODUCTION READY**
+
+✅ **RLS enabled** on all business tables  
+✅ **Audit triggers** installed and tested  
+✅ **Multi-tenant isolation** verified  
+✅ **User context preservation** throughout system  
+✅ **Service role restrictions** properly implemented
+
+### 📚 **For Complete Details**
+
+**👉 See [SUPABASE_DATABASE_GUIDE.md](./SUPABASE_DATABASE_GUIDE.md) for:**
+- Complete RLS policy documentation
+- Database schema and relationships  
+- Audit trigger implementation details
+- Auth role decision matrices
+- Troubleshooting and verification queries
+- Security implementation deep dive
+
+### 🚨 **Quick Developer Guidelines**
+
+#### **When Writing New Code:**
+1. **User-initiated operations** → Use `AuthContext` and pass `access_token`
+2. **System/admin operations** → Use service role client
+3. **Never manually set audit fields** → Let database triggers handle them
+4. **Test with RLS enabled** → Verify data isolation works
+
+#### **Common Patterns:**
+```python
+# ✅ CORRECT: User operation with proper auth
+async def get_user_media(user_id, access_token, refresh_token=None):
+    client = await self.create_user_authenticated_client(access_token, refresh_token)
+    return await client.table('media').select('*').execute()
+
+# ✅ CORRECT: System operation  
+async def webhook_callback(data):
+    client = await self._get_service_client()
+    return await client.table('transcripts').update(data).execute()
+```
+
+**🔍 For troubleshooting auth issues, debugging queries, and implementation details, always refer to the [Supabase Database Guide](./SUPABASE_DATABASE_GUIDE.md).**
 
 ---
 
@@ -581,10 +663,18 @@ pytest tests/ -v
 - [x] Audio cleanup after transcription
 - [x] Background video processing
 
+### Authentication System Implementation
+- [x] Service method categorization completed
+- [x] User-authenticated client patterns implemented
+- [x] API endpoints updated with AuthContext
+- [x] System operation patterns established  
+- [x] Webhook callback handling implemented
+- [x] Comprehensive documentation completed
+
 **System Status:** ✅ Production Ready
 
 ---
 
 **End of Onboarding Guide**  
-*Last Updated: June 27, 2025 - Media table rename implementation completed*  
+*Last Updated: June 30, 2025 - Authentication system implementation completed, all API endpoints updated*  
 *This document reflects the current production state. Always check git history for recent changes.*
