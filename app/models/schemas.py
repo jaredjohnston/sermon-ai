@@ -337,6 +337,16 @@ class ContentTemplateUpdate(BaseModel):
     status: Optional[TemplateStatus] = None
     model_settings: Optional[Dict[str, Any]] = None
 
+class ContentTemplatePublic(BaseModel):
+    """Public template model (only shows what users should see)"""
+    model_config = {"protected_namespaces": ()}
+    
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    content_type_name: str
+    example_content: List[str] = Field(default_factory=list)
+
 # Generated Content Models
 class GeneratedContentBase(BaseModel):
     """Base generated content model"""
@@ -389,12 +399,37 @@ class ContentGenerationResponse(BaseModel):
 # Template Pattern Extraction Models
 class TemplateExtractionRequest(BaseModel):
     """Request to extract patterns from examples"""
-    content_type_name: str = Field(..., min_length=2, max_length=50)
-    examples: List[str] = Field(..., min_items=1, max_items=5)
-    description: Optional[str] = Field(None, max_length=500)
+    content_type_name: str = Field(..., min_length=2, max_length=100, description="User-defined content type (e.g., 'small group guide', 'Facebook post')")
+    examples: List[str] = Field(..., min_items=1, max_items=5, description="2-5 examples of the content type you want to create")
+    description: Optional[str] = Field(None, max_length=500, description="Optional description to provide more context about this content type")
 
 class TemplateExtractionResponse(BaseModel):
     """Response from template pattern extraction"""
     structured_prompt: str
     confidence_score: float = Field(..., ge=0.0, le=1.0)
-    extracted_patterns: Dict[str, Any] = Field(default_factory=dict) 
+    extracted_patterns: Dict[str, Any] = Field(default_factory=dict)
+
+# Upload Preparation Models
+class PrepareUploadRequest(BaseModel):
+    """Request to prepare a file upload"""
+    filename: str = Field(..., min_length=1, max_length=255)
+    content_type: str = Field(..., pattern=r'^(video|audio|text|application)/[\w\.-]+$')
+    size_bytes: int = Field(..., gt=0, le=50 * 1024 * 1024 * 1024)  # 50GB max
+
+class PrepareUploadResponse(BaseModel):
+    """Response from upload preparation"""
+    upload_url: str
+    upload_fields: Dict[str, Any]
+    media_id: str
+    processing_info: Dict[str, Any]
+    expires_in: int = Field(default=3600)  # 1 hour
+
+class UploadStatusResponse(BaseModel):
+    """Response for upload status check"""
+    media_id: str
+    upload_status: str  # preparing, uploading, completed, failed
+    processing_stage: str  # upload_complete, extracting_audio, transcribing, completed, failed
+    file_category: str  # audio, video
+    transcript_id: Optional[str] = None
+    transcript_status: Optional[str] = None
+    error_message: Optional[str] = None 
