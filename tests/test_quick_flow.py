@@ -34,30 +34,62 @@ class TestQuickFlow:
             if os.path.exists(filepath):
                 print(f"\n🔍 Testing {expected_category} file routing: {filepath}")
                 
-                with open(filepath, "rb") as f:
-                    test_content = f.read()
+                # Get file size for new upload flow
+                file_size = os.path.getsize(filepath)
                 
-                files = {"file": (filepath, test_content, content_type)}
+                # Step 1: Prepare upload (new flow)
+                prepare_payload = {
+                    "filename": os.path.basename(filepath),
+                    "content_type": content_type,
+                    "size_bytes": file_size
+                }
                 headers = {"Authorization": f"Bearer {self.access_token}"}
                 
-                response = client.post("/api/v1/transcription/upload", files=files, headers=headers)
+                prepare_response = client.post("/upload/prepare", json=prepare_payload, headers=headers)
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    processing_info = data.get('processing_info', {})
+                if prepare_response.status_code == 200:
+                    prepare_data = prepare_response.json()
+                    processing_info = prepare_data.get('processing_info', {})
                     detected_category = processing_info.get('file_category', 'unknown')
                     
-                    print(f"   ✅ Upload successful")
+                    print(f"   ✅ Upload preparation successful")
                     print(f"   📁 Expected: {expected_category}, Detected: {detected_category}")
                     
-                    if detected_category == expected_category:
-                        print(f"   ✅ Correct file type detection")
-                        results[expected_category] = True
+                    # Step 2: Simulate webhook (file upload completed)
+                    media_id = prepare_data.get('media_id')
+                    upload_url = prepare_data.get('upload_url', '')
+                    storage_path = upload_url.split('/object/videos/')[-1] if '/object/videos/' in upload_url else filepath
+                    
+                    webhook_payload = {
+                        "object_name": storage_path,
+                        "bucket_name": "videos",
+                        "metadata": {
+                            "media_id": media_id,
+                            "client_id": self.client_id,
+                            "user_id": self.user_id,
+                            "file_category": expected_category,
+                            "needs_audio_extraction": expected_category == "video",
+                            "processing_type": f"{'video_with_audio_extraction' if expected_category == 'video' else 'direct_audio'}"
+                        }
+                    }
+                    
+                    webhook_response = client.post("/webhooks/upload-complete", json=webhook_payload)
+                    
+                    if webhook_response.status_code == 200:
+                        print(f"   ✅ Webhook processing successful")
+                        
+                        if detected_category == expected_category:
+                            print(f"   ✅ Correct file type detection")
+                            results[expected_category] = True
+                        else:
+                            print(f"   ❌ Incorrect file type detection")
+                            results[expected_category] = False
                     else:
-                        print(f"   ❌ Incorrect file type detection")
+                        print(f"   ❌ Webhook processing failed: {webhook_response.status_code}")
                         results[expected_category] = False
                 else:
-                    print(f"   ❌ Upload failed: {response.status_code}")
+                    print(f"   ❌ Upload preparation failed: {prepare_response.status_code}")
+                    print(f"   Response: {prepare_response.text}")
                     results[expected_category] = False
             else:
                 print(f"\n⚠️  {expected_category.title()} test file not found: {filepath}")
@@ -109,44 +141,33 @@ class TestQuickFlow:
             
         client = TestClient(app)
         
-        # Test both audio and video files to verify smart routing
+        # Use specific 86MB sermon file
         import os
         
-        # Prioritize testing both file types to demonstrate smart routing
-        test_files = [
-            ("test_audio.mp4", "video/mp4"),     # Small test file first
-            ("test_audio.mp3", "audio/mpeg"),    # Test audio routing 
-            ("/Users/jaredjohnston/Desktop/SermonAI/455_test_video_file.mp4", "video/mp4"),  # Large file last
-            ("1gb_test_file.mp4", "video/mp4"),
-            ("large_test_file.mp4", "video/mp4"),
-        ]
+        test_file_path = "/Users/jaredjohnston/Desktop/SermonAI/full_sermon_test_86mb.mp3"
+        content_type = "audio/mpeg"
         
-        for filepath, content_type in test_files:
-            if os.path.exists(filepath):
-                file_size = os.path.getsize(filepath)
-                test_file_path = filepath
-                filename = filepath
-                break
+        if not os.path.exists(test_file_path):
+            print(f"❌ Test file not found: {test_file_path}")
+            print(f"   Please ensure the file exists at this location")
+            return False
+            
+        file_size = os.path.getsize(test_file_path)
+        file_size_mb = file_size / 1024 / 1024
+        filename = os.path.basename(test_file_path)
         
-        if test_file_path:
-            file_size_mb = file_size / 1024 / 1024
-            print(f"🔹 Using real file: {test_file_path}")
-            print(f"   File size: {file_size_mb:.2f}MB")
-            
-            # Show which upload method will be used
-            from app.config.settings import settings
-            tus_threshold_mb = settings.TUS_THRESHOLD / 1024 / 1024
-            upload_method = "TUS resumable" if file_size > settings.TUS_THRESHOLD else "standard"
-            print(f"   Upload method: {upload_method} (threshold: {tus_threshold_mb}MB)")
-            
-            with open(test_file_path, "rb") as f:
-                test_content = f.read()
-        else:
-            print(f"🔹 Using fake test data (real files not found)")
-            test_content = b"fake audio data" * 1000  # 13KB file
-            filename = "test_sermon.mp4"
-            content_type = "video/mp4"
-            file_size = len(test_content)
+        print(f"🔹 Using real 86MB sermon file: {test_file_path}")
+        print(f"   File size: {file_size_mb:.2f}MB")
+        print(f"   Content type: {content_type}")
+        
+        # Show which upload method will be used
+        from app.config.settings import settings
+        tus_threshold_mb = settings.TUS_THRESHOLD / 1024 / 1024
+        upload_method = "TUS resumable" if file_size > settings.TUS_THRESHOLD else "standard"
+        print(f"   Upload method: {upload_method} (threshold: {tus_threshold_mb}MB)")
+        
+        with open(test_file_path, "rb") as f:
+            test_content = f.read()
         
         files = {
             "file": (filename, test_content, content_type)
@@ -155,30 +176,87 @@ class TestQuickFlow:
             "Authorization": f"Bearer {self.access_token}"
         }
         
-        print(f"🔹 Testing smart file type routing (content type: {content_type})...")
-        response = client.post("/api/v1/transcription/upload", files=files, headers=headers)
+        print(f"🔹 Testing new upload flow with REAL file upload (content type: {content_type})...")
         
-        print(f"📋 Upload response status: {response.status_code}")
+        # Step 1: Prepare upload
+        prepare_payload = {
+            "filename": os.path.basename(filename),
+            "content_type": content_type,
+            "size_bytes": file_size
+        }
         
-        if response.status_code == 422:
+        prepare_response = client.post("/upload/prepare", json=prepare_payload, headers=headers)
+        print(f"📋 Prepare response status: {prepare_response.status_code}")
+        
+        if prepare_response.status_code == 422:
             print(f"⚠️  File validation failed")
             print(f"   This might be expected for fake data, but real audio should work")
             return True
-        elif response.status_code == 200:
-            data = response.json()
-            print(f"✅ Upload successful!")
-            print(f"   Video ID: {data['video_id']}")
-            print(f"   Transcript ID: {data['transcript_id']}")
-            print(f"   Request ID: {data.get('request_id', 'N/A')}")
+        elif prepare_response.status_code == 200:
+            prepare_data = prepare_response.json()
+            print(f"✅ Upload preparation successful!")
+            print(f"   Media ID: {prepare_data['media_id']}")
+            print(f"   Upload URL: {prepare_data['upload_url'][:80]}...")
             
-            # Print database cross-reference summary
-            print(f"\n🔍 DATABASE CROSS-REFERENCE IDs:")
-            print(f"   User ID:       {self.user_id}")
-            print(f"   Client ID:     {self.client_id}")
-            print(f"   Client Name:   {self.client_name}")
-            print(f"   Video ID:      {data['video_id']}")
-            print(f"   Transcript ID: {data['transcript_id']}")
-            print(f"   Request ID:    {data.get('request_id', 'N/A')}")
+            # Step 2: ACTUALLY upload file to Supabase Storage
+            upload_url = prepare_data['upload_url']
+            upload_headers = prepare_data['upload_fields']
+            
+            print(f"🚀 Uploading {file_size_mb:.2f}MB file to Supabase Storage...")
+            
+            import requests
+            upload_response = requests.put(
+                upload_url,
+                data=test_content,
+                headers=upload_headers,
+                timeout=300  # 5 minute timeout for large files
+            )
+            
+            print(f"📋 Supabase upload response: {upload_response.status_code}")
+            
+            if upload_response.status_code in [200, 201]:
+                print(f"✅ Real file uploaded to Supabase Storage!")
+                
+                # Step 3: Trigger webhook processing (real processing)
+                storage_path = upload_url.split('/object/videos/')[-1] if '/object/videos/' in upload_url else filename
+                
+                webhook_payload = {
+                    "object_name": storage_path,
+                    "bucket_name": "videos",
+                    "metadata": {
+                        "media_id": prepare_data['media_id'],
+                        "client_id": self.client_id,
+                        "user_id": self.user_id,
+                        "file_category": "video" if "video" in content_type else "audio",
+                        "needs_audio_extraction": "video" in content_type,
+                        "processing_type": "video_with_audio_extraction" if "video" in content_type else "direct_audio"
+                    }
+                }
+                
+                webhook_response = client.post("/webhooks/upload-complete", json=webhook_payload)
+                print(f"📋 Webhook response status: {webhook_response.status_code}")
+                
+                if webhook_response.status_code == 200:
+                    webhook_data = webhook_response.json()
+                    print(f"✅ Real processing pipeline started!")
+                    print(f"   Status: {webhook_data.get('status')}")
+                    print(f"   Message: {webhook_data.get('message')}")
+                    
+                    # Print database cross-reference summary for Supabase verification
+                    print(f"\n🔍 VERIFY IN SUPABASE:")
+                    print(f"   User ID:       {self.user_id}")
+                    print(f"   Client ID:     {self.client_id}")
+                    print(f"   Client Name:   {self.client_name}")
+                    print(f"   Media ID:      {prepare_data['media_id']}")
+                    print(f"   Storage Path:  {storage_path}")
+                    print(f"   File in Storage: Check 'videos' bucket for: {storage_path}")
+                    print(f"   Media Record: Check 'media' table for media_id: {prepare_data['media_id']}")
+                else:
+                    print(f"❌ Webhook processing failed: {webhook_response.status_code}")
+                    print(f"   Response: {webhook_response.text}")
+            else:
+                print(f"❌ File upload to Supabase failed: {upload_response.status_code}")
+                print(f"   Response: {upload_response.text[:200]}...")
             
             # NEW: Verify smart routing functionality
             self._verify_smart_routing_response(data)

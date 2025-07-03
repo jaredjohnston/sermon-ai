@@ -11,12 +11,57 @@ from app.services.audio_cleanup_service import audio_cleanup_service
 from app.services.file_type_service import file_type_service, FileCategory
 from app.services.audio_service import audio_service, AudioProcessingError
 from app.middleware.auth import get_current_user, get_auth_context, AuthContext
-from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate
+from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate, PrepareUploadRequest, PrepareUploadResponse
 from datetime import datetime, UTC, timedelta
 import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+async def start_transcription_when_ready(transcript_id: str, audio_signed_url: str, user_id: str, access_token: str):
+    """
+    Background task to start Deepgram transcription
+    This runs after upload completes and doesn't block the HTTP response
+    """
+    try:
+        logger.info(f"Starting background transcription for transcript {transcript_id}")
+        
+        # Give upload a moment to complete if needed
+        await asyncio.sleep(2)
+        
+        # Update status to processing
+        await supabase_service.update_transcript(
+            transcript_id,
+            {"status": "processing"},
+            user_id,
+            access_token
+        )
+        
+        # Start Deepgram transcription
+        result = await deepgram_service.transcribe_from_url(audio_signed_url)
+        logger.info(f"Deepgram transcription started for {transcript_id}: {result.get('request_id')}")
+        
+        # Update transcript with Deepgram request_id
+        await supabase_service.update_transcript(
+            transcript_id,
+            {"request_id": result.get("request_id")},
+            user_id,
+            access_token
+        )
+        
+    except Exception as e:
+        logger.error(f"Background transcription failed for {transcript_id}: {str(e)}", exc_info=True)
+        
+        # Update transcript status to failed
+        try:
+            await supabase_service.update_transcript(
+                transcript_id,
+                {"status": "failed", "error_message": str(e)},
+                user_id,
+                access_token
+            )
+        except Exception as update_error:
+            logger.error(f"Failed to update transcript status: {update_error}")
 
 
 async def upload_video_from_temp_file(temp_video_path: Path, storage_path: str, file_size: int, content_type: str) -> str:
@@ -62,6 +107,125 @@ async def extract_and_upload_audio(file: UploadFile, client_id: str, video_id: s
         client_id=client_id,  
         video_id=video_id
     )
+
+@router.post("/upload/prepare")
+async def prepare_upload(
+    request: PrepareUploadRequest,
+    auth: AuthContext = Depends(get_auth_context)
+) -> PrepareUploadResponse:
+    """
+    Prepare a file upload by validating file type, auth, and generating presigned URL
+    This replaces the synchronous upload with a prepare -> direct upload -> webhook flow
+    """
+    try:
+        logger.info(f"Preparing upload for file: {request.filename} from user: {auth.user.email}")
+        
+        # 1. AUTHENTICATION & CLIENT VALIDATION
+        client = await supabase_service.get_user_client(auth.user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to upload files"
+            )
+        
+        # 2. FILE TYPE DETECTION & VALIDATION (reuse existing logic)
+        logger.info(f"Validating file: {request.filename} ({request.size_bytes} bytes)")
+        
+        # Create a mock validation result for the metadata-only validation
+        class MockFile:
+            def __init__(self, filename, content_type, size):
+                self.filename = filename
+                self.content_type = content_type
+                self.size = size
+        
+        mock_file = MockFile(request.filename, request.content_type, request.size_bytes)
+        
+        # Use existing validation logic but for metadata only
+        file_category = file_type_service.detect_file_category(request.content_type)
+        processing_requirements = file_type_service.get_processing_requirements(request.content_type)
+        
+        # Basic validation checks
+        if request.size_bytes > 50 * 1024 * 1024 * 1024:  # 50GB limit
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="File size exceeds 50GB limit"
+            )
+        
+        if file_category not in [FileCategory.AUDIO, FileCategory.VIDEO]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type for transcription: {file_category.value}"
+            )
+        
+        logger.info(f"File category detected: {file_category.value}, Processing type: {processing_requirements['processing_type']}")
+        
+        # 3. STORAGE PATH GENERATION WITH USER CONTEXT
+        storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/videos/{request.filename}"
+        
+        # 4. DATABASE PREPARATION - Create media record in "preparing" state
+        logger.info(f"Creating media record for {request.filename}")
+        media = await supabase_service.create_media(
+            MediaCreate(
+                filename=request.filename,
+                content_type=request.content_type,
+                size_bytes=request.size_bytes,
+                storage_path=storage_path,
+                client_id=client.id,
+                metadata={
+                    "file_category": file_category.value,
+                    "processing_requirements": processing_requirements,
+                    "upload_status": "preparing",
+                    "upload_method": "direct_to_supabase"
+                }
+            ),
+            auth.user.id
+        )
+        logger.info(f"Media record created: {media.id}")
+        
+        # 5. SIMPLE SUPABASE UPLOAD URL (same as our API was using)
+        logger.info(f"Generating direct Supabase upload URL for: {storage_path}")
+        
+        # Just give frontend the same TUS endpoint our API was using
+        supabase_base = settings.SUPABASE_URL.rstrip('/')
+        upload_url = f"{supabase_base}/storage/v1/object/{settings.STORAGE_BUCKET}/{storage_path}"
+        
+        logger.info(f"Direct upload URL: {upload_url}")
+        
+        # 6. SUCCESS RESPONSE  
+        processing_info = {
+            "file_category": file_category.value,
+            "processing_type": processing_requirements["processing_type"],
+            "audio_extraction_needed": processing_requirements["needs_audio_extraction"],
+            "video_upload_needed": processing_requirements["needs_video_upload"],
+            "estimated_processing_time": f"~{max(2, int(request.size_bytes / 1024 / 1024 / 100))} minutes",
+            "upload_method": "direct_user_auth"
+        }
+        
+        logger.info(f"Upload preparation successful for media {media.id}")
+        
+        # User uploads with their own JWT token (secure)
+        upload_headers = {
+            "Authorization": f"Bearer {auth.access_token}",  # USER'S token, not service role
+            "Content-Type": request.content_type,
+            "x-upsert": "true"
+        }
+        
+        return PrepareUploadResponse(
+            upload_url=upload_url,
+            upload_fields=upload_headers,  # User-authenticated headers
+            media_id=str(media.id),
+            processing_info=processing_info,
+            expires_in=3600
+        )
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Upload preparation error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload preparation failed: {str(e)}"
+        )
 
 @router.post("/upload")
 async def transcribe_upload(
@@ -170,33 +334,29 @@ async def transcribe_upload(
                     detail=f"Unsupported file type for transcription: {file_category.value}"
                 )
             
-            # STEP 4: Create transcript tracking record BEFORE starting transcription
-            # This prevents race condition where callback fires before record exists
+            # STEP 4: Create transcript tracking record 
             transcript = await supabase_service.create_transcript(
                 TranscriptCreate(
                     video_id=video.id,
                     client_id=client.id,
-                    status="processing",
-                    request_id=None,  # Will be updated after Deepgram call
-                    metadata={"audio_storage_path": audio_storage_path}  # Store for cleanup
+                    status="uploading",  # Initial status
+                    request_id=None,
+                    metadata={"audio_storage_path": audio_storage_path, "audio_signed_url": audio_signed_url}
                 ),
                 auth.user.id,
                 auth.access_token
             )
             logger.info(f"Transcript record created: {transcript.id}")
             
-            # Start transcription with audio immediately (don't wait for video upload)
-            result = await deepgram_service.transcribe_from_url(audio_signed_url)
-            logger.info(f"Transcription started with request_id: {result.get('request_id')}")
-            
-            # Update transcript record with request_id from Deepgram
-            transcript = await supabase_service.update_transcript(
-                transcript.id,
-                {"request_id": result.get("request_id")},
-                auth.user.id,
-                auth.access_token
+            # STEP 5: Start transcription in background task (don't block HTTP response)
+            asyncio.create_task(
+                start_transcription_when_ready(transcript.id, audio_signed_url, auth.user.id, auth.access_token),
+                name=f"transcription_{transcript.id}"
             )
-            logger.info(f"Transcript updated with request_id: {result.get('request_id')}")
+            logger.info(f"Background transcription task started for transcript {transcript.id}")
+            
+            # Return immediately - don't wait for transcription to start
+            result = {"request_id": f"async_{transcript.id}", "callback_url": f"/api/v1/transcription/callback"}
             
         except Exception as e:
             logger.error(f"Processing failed: {str(e)}")
@@ -601,6 +761,233 @@ async def test_callback():
         "message": "Callback endpoint is accessible",
         "timestamp": datetime.now(UTC).isoformat()
     }
+
+@router.post("/webhooks/upload-complete")
+async def handle_upload_complete(request: Request):
+    """
+    Webhook endpoint for Supabase Storage upload completion
+    Triggers smart routing and background processing
+    """
+    try:
+        logger.info("🔔 Upload completion webhook received")
+        
+        # Parse webhook payload
+        body = await request.body()
+        webhook_data = json.loads(body.decode('utf-8'))
+        
+        logger.info(f"Webhook data: {json.dumps(webhook_data, indent=2)[:500]}...")
+        
+        # Extract metadata from webhook
+        object_name = webhook_data.get("object_name") or webhook_data.get("name")
+        bucket_name = webhook_data.get("bucket_name") or webhook_data.get("bucket")
+        metadata = webhook_data.get("metadata", {})
+        
+        if not object_name:
+            logger.error("❌ No object_name found in webhook data")
+            raise HTTPException(status_code=400, detail="Missing object_name in webhook")
+        
+        # With RLS approach, we need to extract context from the storage path and media record
+        # Parse client_id from storage path: uploads/{client_id}/videos/filename.mp4
+        path_parts = object_name.split("/")
+        if len(path_parts) < 3:
+            logger.error(f"❌ Invalid storage path format: {object_name}")
+            raise HTTPException(status_code=400, detail="Invalid storage path format")
+        
+        client_id = path_parts[1]  # Extract client_id from path
+        filename = path_parts[-1]  # Extract filename
+        
+        # Find media record by filename and client_id
+        try:
+            media_records = await supabase_service.get_media_by_filename_and_client(
+                filename=filename,
+                client_id=client_id,
+                access_token=settings.SUPABASE_SERVICE_ROLE_KEY
+            )
+            
+            if not media_records:
+                logger.error(f"❌ No media record found for {filename} in client {client_id}")
+                raise HTTPException(status_code=404, detail="Media record not found")
+            
+            # Get the most recent media record (in case of duplicates)
+            media = media_records[0]
+            media_metadata = media.metadata or {}
+            
+            media_id = str(media.id)
+            user_id = str(media.created_by)
+            file_category = media_metadata.get("file_category", "unknown")
+            needs_audio_extraction = media_metadata.get("needs_audio_extraction", False)
+            processing_type = media_metadata.get("processing_type", "unknown")
+            
+            logger.info(f"📋 Processing upload completion for {file_category} file")
+            logger.info(f"   Media ID: {media_id}")
+            logger.info(f"   Client ID: {client_id}")
+            logger.info(f"   User ID: {user_id}")
+            logger.info(f"   Processing type: {processing_type}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to get media record: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to get media record: {str(e)}")
+        
+        # Update media status to completed
+        await supabase_service.update_media(
+            media_id,
+            {
+                "metadata": {
+                    **metadata,
+                    "upload_status": "completed",
+                    "storage_url": object_name,
+                    "webhook_received_at": datetime.now(UTC).isoformat()
+                }
+            },
+            user_id
+        )
+        logger.info(f"✅ Updated media {media_id} status to completed")
+        
+        # Start background processing based on file type (SMART ROUTING)
+        if file_category == "audio":
+            logger.info(f"🎵 Starting audio processing pipeline")
+            await start_audio_transcription_background(
+                media_id=media_id,
+                storage_path=object_name,
+                client_id=client_id,
+                user_id=user_id
+            )
+        elif file_category == "video":
+            logger.info(f"🎬 Starting video processing pipeline (audio extraction)")
+            await start_video_processing_background(
+                media_id=media_id,
+                storage_path=object_name,
+                client_id=client_id,
+                user_id=user_id
+            )
+        else:
+            logger.warning(f"⚠️ Unknown file category: {file_category}")
+            raise HTTPException(status_code=400, detail=f"Unsupported file category: {file_category}")
+        
+        return {
+            "status": "success",
+            "message": "Upload processed and transcription started",
+            "media_id": media_id,
+            "processing_type": processing_type,
+            "processed_at": datetime.now(UTC).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Upload webhook processing failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload webhook processing failed: {str(e)}"
+        )
+
+async def start_audio_transcription_background(media_id: str, storage_path: str, client_id: str, user_id: str):
+    """Background audio processing - direct transcription"""
+    try:
+        logger.info(f"🎵 Starting audio transcription for media {media_id}")
+        
+        # Create transcript record
+        transcript = await supabase_service.create_transcript(
+            TranscriptCreate(
+                video_id=media_id,  # Using media_id for consistency
+                client_id=client_id,
+                status="processing",
+                metadata={
+                    "audio_storage_path": storage_path,
+                    "processing_type": "direct_audio"
+                }
+            ),
+            user_id,
+            settings.SUPABASE_SERVICE_ROLE_KEY  # Service role for background processing
+        )
+        logger.info(f"✅ Created transcript record: {transcript.id}")
+        
+        # Get signed URL for Deepgram
+        audio_signed_url = await supabase_service.get_signed_url(
+            bucket=settings.STORAGE_BUCKET,
+            path=storage_path,
+            expires_in=3600
+        )
+        
+        # Start Deepgram transcription
+        result = await deepgram_service.transcribe_from_url(audio_signed_url)
+        logger.info(f"✅ Deepgram transcription started: {result.get('request_id')}")
+        
+        # Update transcript with request_id
+        await supabase_service.update_transcript_system(
+            transcript.id,
+            {"request_id": result.get("request_id")},
+            user_id
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Audio transcription background processing failed: {str(e)}", exc_info=True)
+        # Update transcript status to failed if it was created
+        if 'transcript' in locals():
+            await supabase_service.update_transcript_system(
+                transcript.id,
+                {"status": "failed", "error_message": str(e)},
+                user_id
+            )
+
+async def start_video_processing_background(media_id: str, storage_path: str, client_id: str, user_id: str):
+    """Background video processing with audio extraction"""
+    try:
+        logger.info(f"🎬 Starting video processing for media {media_id}")
+        
+        # Extract audio from video using existing audio extraction service
+        # The service will handle downloading video, extracting audio, and uploading audio
+        audio_storage_path, _ = await audio_extraction_service.extract_and_upload_audio_from_storage(
+            video_storage_path=storage_path,
+            client_id=client_id,
+            media_id=media_id
+        )
+        logger.info(f"✅ Audio extracted to: {audio_storage_path}")
+        
+        # Create transcript record
+        transcript = await supabase_service.create_transcript(
+            TranscriptCreate(
+                video_id=media_id,  # Using media_id for consistency
+                client_id=client_id,
+                status="processing",
+                metadata={
+                    "audio_storage_path": audio_storage_path,
+                    "video_storage_path": storage_path,
+                    "processing_type": "video_extraction"
+                }
+            ),
+            user_id,
+            settings.SUPABASE_SERVICE_ROLE_KEY
+        )
+        logger.info(f"✅ Created transcript record: {transcript.id}")
+        
+        # Get signed URL for extracted audio
+        audio_signed_url = await supabase_service.get_signed_url(
+            bucket=settings.STORAGE_BUCKET,
+            path=audio_storage_path,
+            expires_in=3600
+        )
+        
+        # Start Deepgram transcription
+        result = await deepgram_service.transcribe_from_url(audio_signed_url)
+        logger.info(f"✅ Deepgram transcription started: {result.get('request_id')}")
+        
+        # Update transcript with request_id
+        await supabase_service.update_transcript_system(
+            transcript.id,
+            {"request_id": result.get("request_id")},
+            user_id
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Video processing background processing failed: {str(e)}", exc_info=True)
+        # Update transcript status to failed if it was created
+        if 'transcript' in locals():
+            await supabase_service.update_transcript_system(
+                transcript.id,
+                {"status": "failed", "error_message": str(e)},
+                user_id
+            )
 
 @router.post("/callback")
 async def transcription_callback(request: Request):

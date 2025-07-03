@@ -16,6 +16,7 @@ from app.models.schemas import (
 )
 import uuid
 import logging
+from datetime import datetime, UTC
 from fastapi import UploadFile
 
 
@@ -332,6 +333,75 @@ class SupabaseService:
             return Media(**response.data[0])
         except Exception as e:
             raise DatabaseError(f"Failed to create media: {str(e)}") from e
+    
+    async def delete_media(self, media_id: UUID, user_id: UUID) -> bool:
+        """Delete a media record (soft delete)"""
+        try:
+            client = await self._get_service_client()
+            response = await client.table('media').update({
+                "deleted_at": datetime.now(UTC).isoformat(),
+                "deleted_by": str(user_id),
+                "updated_by": str(user_id)
+            }).eq('id', str(media_id)).execute()
+            
+            return len(response.data) > 0
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete media: {str(e)}") from e
+
+    async def update_media(self, media_id: UUID, updates: Dict[str, Any], user_id: UUID) -> Media:
+        """Update a media record"""
+        try:
+            client = await self._get_service_client()
+            
+            # Add updated_by to the updates
+            updates_with_meta = {
+                **updates,
+                "updated_by": str(user_id)
+            }
+            
+            response = await client.table('media').update(updates_with_meta).eq('id', str(media_id)).execute()
+            
+            if not response.data:
+                raise NotFoundError(f"Media not found: {media_id}")
+            
+            return Media(**response.data[0])
+        except Exception as e:
+            raise DatabaseError(f"Failed to update media: {str(e)}") from e
+
+    async def get_media(self, media_id: UUID, access_token: str) -> Media:
+        """Get a single media record by ID"""
+        try:
+            if access_token == settings.SUPABASE_SERVICE_ROLE_KEY:
+                # Use service client for system operations
+                client = await self._get_service_client()
+            else:
+                # Use user-authenticated client
+                client = await self.create_user_authenticated_client(access_token)
+            
+            response = await client.table('media').select("*").eq('id', str(media_id)).is_('deleted_at', 'null').execute()
+            
+            if not response.data:
+                raise NotFoundError(f"Media not found: {media_id}")
+            
+            return Media(**response.data[0])
+        except Exception as e:
+            raise DatabaseError(f"Failed to get media: {str(e)}") from e
+
+    async def get_media_by_filename_and_client(self, filename: str, client_id: str, access_token: str) -> List[Media]:
+        """Get media records by filename and client_id"""
+        try:
+            if access_token == settings.SUPABASE_SERVICE_ROLE_KEY:
+                # Use service client for system operations
+                client = await self._get_service_client()
+            else:
+                # Use user-authenticated client
+                client = await self.create_user_authenticated_client(access_token)
+            
+            response = await client.table('media').select("*").eq('filename', filename).eq('client_id', client_id).is_('deleted_at', 'null').order('created_at', desc=True).execute()
+            
+            return [Media(**item) for item in response.data]
+        except Exception as e:
+            raise DatabaseError(f"Failed to get media by filename and client: {str(e)}") from e
     
     # Backward compatibility method
     async def create_video(self, video: VideoCreate, user_id: UUID) -> Video:
@@ -921,6 +991,94 @@ class SupabaseService:
         except Exception as e:
             self.logger.error(f"TUS upload failed for {storage_path}: {str(e)}")
             raise
+
+    async def create_presigned_upload_url(
+        self,
+        bucket: str,
+        path: str,
+        metadata: Dict[str, Any] = None,
+        expires_in: int = 3600
+    ) -> Dict[str, Any]:
+        """
+        Create a presigned URL for direct client uploads to Supabase Storage
+        
+        Args:
+            bucket: Storage bucket name
+            path: Storage path for the file
+            metadata: Metadata to embed with the upload
+            expires_in: URL expiration in seconds (default 1 hour)
+            
+        Returns:
+            Dict containing upload_url and upload_fields for direct upload
+        """
+        try:
+            client = await self._get_service_client()
+            
+            # Generate signed upload URL using correct Supabase SDK pattern
+            storage_client = client.storage.from_(bucket)
+            signed_url_response = await storage_client.create_signed_upload_url(path)
+            
+            # Handle different response formats from Supabase
+            if isinstance(signed_url_response, dict):
+                if 'error' in signed_url_response:
+                    raise DatabaseError(f"Failed to create presigned URL: {signed_url_response['error']}")
+                upload_url = signed_url_response.get('signedURL') or signed_url_response.get('url')
+                upload_fields = signed_url_response.get('fields', {})
+            else:
+                # If response is a string, it's likely the URL directly
+                upload_url = signed_url_response
+                upload_fields = {}
+            
+            # Add metadata to upload fields if provided
+            if metadata:
+                # Supabase supports metadata through custom headers or form fields
+                for key, value in metadata.items():
+                    upload_fields[f"x-amz-meta-{key}"] = str(value)
+            
+            self.logger.info(f"Generated presigned upload URL for {path} (expires in {expires_in}s)")
+            
+            return {
+                "url": upload_url,
+                "fields": upload_fields
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create presigned upload URL: {str(e)}")
+            raise DatabaseError(f"Presigned URL generation failed: {str(e)}") from e
+    
+    async def get_signed_url(
+        self,
+        bucket: str,
+        path: str,
+        expires_in: int = 3600
+    ) -> str:
+        """
+        Get a signed URL for downloading/accessing a file
+        
+        Args:
+            bucket: Storage bucket name
+            path: Storage path of the file
+            expires_in: URL expiration in seconds (default 1 hour)
+            
+        Returns:
+            Signed URL string
+        """
+        try:
+            client = await self._get_service_client()
+            
+            signed_url_response = await client.storage.from_(bucket).create_signed_url(path, expires_in)
+            
+            if hasattr(signed_url_response, 'error') and signed_url_response.error:
+                raise DatabaseError(f"Failed to create signed URL: {signed_url_response.error}")
+            
+            signed_url = signed_url_response.get('signedURL')
+            
+            self.logger.info(f"Generated signed URL for {path} (expires in {expires_in}s)")
+            return signed_url
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create signed URL: {str(e)}")
+            raise DatabaseError(f"Signed URL generation failed: {str(e)}") from e
 
 # Create a singleton instance
 supabase_service = SupabaseService() 
