@@ -190,7 +190,7 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "***REMOVED***")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "***REMOVED***")
     # Storage Settings
-    STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "videos")
+    STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "sermons")
     STORAGE_PATH_PREFIX: str = "clients"  # Base path for all client files
     
     # Audio File Settings

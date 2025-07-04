@@ -445,6 +445,28 @@ class SupabaseService:
         except Exception as e:
             raise DatabaseError(f"Failed to create transcript: {str(e)}") from e
     
+    async def create_transcript_system(self, transcript: TranscriptCreate, user_id: UUID) -> Transcript:
+        """Create a new transcript using service role with explicit audit fields"""
+        try:
+            client = await self._get_service_client()
+            # Explicitly set audit fields since we're using service role
+            response = await client.table('transcripts').insert({
+                "video_id": str(transcript.video_id),
+                "client_id": str(transcript.client_id),
+                "user_id": str(user_id),
+                "status": transcript.status,
+                "raw_transcript": transcript.raw_transcript,
+                "processed_transcript": transcript.processed_transcript,
+                "error_message": transcript.error_message,
+                "request_id": transcript.request_id,
+                "metadata": transcript.metadata,
+                "created_by": str(user_id),  # Explicit audit field
+                "updated_by": str(user_id)   # Explicit audit field
+            }).execute()
+            return Transcript(**response.data[0])
+        except Exception as e:
+            raise DatabaseError(f"Failed to create transcript (system): {str(e)}") from e
+    
     async def update_transcript(self, transcript_id: UUID, updates: Dict[str, Any], user_id: UUID, access_token: str, refresh_token: str = None) -> Transcript:
         """Update a transcript using user-authenticated client"""
         try:
@@ -460,18 +482,17 @@ class SupabaseService:
             raise DatabaseError(f"Failed to update transcript: {str(e)}") from e
     
     async def update_transcript_system(self, transcript_id: UUID, updates: Dict[str, Any], user_id: UUID) -> Transcript:
-        """Update a transcript using service role (for system operations like webhooks)"""
+        """Update a transcript using service role with explicit audit fields"""
         try:
             client = await self._get_service_client()
-            # Manually set audit fields for system operations
-            updates["updated_by"] = str(user_id)
-            
-            # If setting deleted_at, also set deleted_by
-            if updates.get("deleted_at"):
-                updates["deleted_by"] = str(user_id)
+            # Add explicit audit field for updates
+            updates_with_audit = {
+                **updates,
+                "updated_by": str(user_id)  # Explicit audit field
+            }
             
             response = await client.table('transcripts')\
-                .update(updates)\
+                .update(updates_with_audit)\
                 .eq("id", str(transcript_id))\
                 .execute()
             return Transcript(**response.data[0])

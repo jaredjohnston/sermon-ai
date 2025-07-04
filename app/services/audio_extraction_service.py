@@ -226,6 +226,110 @@ class AudioExtractionService:
                 logger.info(f"Cleaned up audio file from storage: {audio_storage_path}")
         except Exception as e:
             logger.warning(f"Failed to cleanup audio file {audio_storage_path}: {str(e)}")
+    
+    async def extract_and_upload_audio_from_storage(
+        self,
+        video_storage_path: str,
+        client_id: str,
+        media_id: str
+    ) -> Tuple[str, str]:
+        """
+        Extract audio from video file already stored in Supabase Storage
+        Downloads video, extracts audio, uploads audio back to storage
+        
+        Args:
+            video_storage_path: Storage path of video file in Supabase
+            client_id: Client ID for storage path
+            media_id: Media ID for file naming
+            
+        Returns:
+            Tuple of (audio_storage_path, audio_signed_url)
+            
+        Raises:
+            AudioExtractionError: If extraction or upload fails
+        """
+        import aiohttp
+        
+        temp_video_path = None
+        temp_audio_path = None
+        
+        try:
+            logger.info(f"🎬 Extracting audio from stored video: {video_storage_path}")
+            
+            # Get signed URL to download the video
+            video_signed_url = self.supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(video_storage_path, 3600)
+            if hasattr(video_signed_url, 'error') and video_signed_url.error:
+                raise AudioExtractionError(f"Failed to create video signed URL: {video_signed_url.error}")
+            
+            video_url = video_signed_url.get('signedURL')
+            
+            # Create temporary files
+            audio_filename = f"audio_{media_id}_{uuid.uuid4().hex[:8]}.wav"
+            temp_video_path = self.temp_dir / f"temp_video_{media_id}.tmp"
+            temp_audio_path = self.temp_dir / f"temp_audio_{media_id}.wav"
+            
+            # Download video file
+            logger.info(f"📥 Downloading video from storage...")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(video_url) as response:
+                    if response.status != 200:
+                        raise AudioExtractionError(f"Failed to download video: HTTP {response.status}")
+                    
+                    with open(temp_video_path, 'wb') as f:
+                        async for chunk in response.content.iter_chunked(8192):
+                            f.write(chunk)
+            
+            logger.info(f"📥 Downloaded video ({temp_video_path.stat().st_size} bytes)")
+            
+            # Extract audio using existing FFmpeg logic
+            logger.info(f"🎵 Extracting audio...")
+            await self._extract_audio_ffmpeg(temp_video_path, temp_audio_path)
+            
+            # Upload extracted audio back to storage
+            audio_storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client_id}/audio/{audio_filename}"
+            
+            logger.info(f"📤 Uploading extracted audio to storage...")
+            with open(temp_audio_path, 'rb') as audio_file:
+                audio_data = audio_file.read()
+            
+            upload_response = self.supabase.storage.from_(settings.STORAGE_BUCKET).upload(
+                audio_storage_path,
+                audio_data,
+                file_options={"content-type": "audio/wav"}
+            )
+            
+            if hasattr(upload_response, 'error') and upload_response.error:
+                raise AudioExtractionError(f"Failed to upload audio: {upload_response.error}")
+            
+            # Generate signed URL for Deepgram
+            audio_signed_response = self.supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(audio_storage_path, 3600)
+            if hasattr(audio_signed_response, 'error') and audio_signed_response.error:
+                raise AudioExtractionError(f"Failed to create audio signed URL: {audio_signed_response.error}")
+            
+            audio_signed_url = audio_signed_response.get('signedURL')
+            
+            logger.info(f"✅ Audio extraction completed: {audio_storage_path}")
+            return audio_storage_path, audio_signed_url
+            
+        except Exception as e:
+            logger.error(f"❌ Storage-to-storage audio extraction failed: {str(e)}", exc_info=True)
+            raise AudioExtractionError(f"Audio extraction from storage failed: {str(e)}")
+            
+        finally:
+            # Cleanup temporary files
+            if temp_video_path and temp_video_path.exists():
+                try:
+                    temp_video_path.unlink()
+                    logger.info(f"🧹 Cleaned up temp video: {temp_video_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp video: {e}")
+            
+            if temp_audio_path and temp_audio_path.exists():
+                try:
+                    temp_audio_path.unlink()
+                    logger.info(f"🧹 Cleaned up temp audio: {temp_audio_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp audio: {e}")
 
 
 # Singleton instance

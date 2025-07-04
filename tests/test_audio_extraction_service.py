@@ -82,7 +82,7 @@ class TestAudioExtractionService:
             
             # Verify mocks were called
             mock_ffmpeg.assert_called_once()
-            mock_supabase.storage.from_.assert_called_with("videos")
+            mock_supabase.storage.from_.assert_called_with("sermons")
             mock_bucket.upload.assert_called_once()
             mock_bucket.create_signed_url.assert_called_once()
 
@@ -213,7 +213,7 @@ class TestAudioExtractionService:
             
             await self.service.cleanup_audio_file(test_audio_path)
             
-            mock_supabase.storage.from_.assert_called_once_with("videos")
+            mock_supabase.storage.from_.assert_called_once_with("sermons")
             mock_bucket.remove.assert_called_once_with([test_audio_path])
 
     @pytest.mark.asyncio
@@ -232,7 +232,7 @@ class TestAudioExtractionService:
             await self.service.cleanup_audio_file(test_audio_path)
             
             # Verify deletion was attempted
-            mock_supabase.storage.from_.assert_called_once_with("videos")
+            mock_supabase.storage.from_.assert_called_once_with("sermons")
             mock_bucket.remove.assert_called_once_with([test_audio_path])
 
     @pytest.mark.asyncio

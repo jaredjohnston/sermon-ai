@@ -58,11 +58,11 @@ class TestQuickFlow:
                     # Step 2: Simulate webhook (file upload completed)
                     media_id = prepare_data.get('media_id')
                     upload_url = prepare_data.get('upload_url', '')
-                    storage_path = upload_url.split('/object/videos/')[-1] if '/object/videos/' in upload_url else filepath
+                    storage_path = upload_url.split('/object/sermons/')[-1] if '/object/sermons/' in upload_url else filepath
                     
                     webhook_payload = {
                         "object_name": storage_path,
-                        "bucket_name": "videos",
+                        "bucket_name": "sermons",
                         "metadata": {
                             "media_id": media_id,
                             "client_id": self.client_id,
@@ -218,11 +218,11 @@ class TestQuickFlow:
                 print(f"✅ Real file uploaded to Supabase Storage!")
                 
                 # Step 3: Trigger webhook processing (real processing)
-                storage_path = upload_url.split('/object/videos/')[-1] if '/object/videos/' in upload_url else filename
+                storage_path = upload_url.split('/object/sermons/')[-1] if '/object/sermons/' in upload_url else filename
                 
                 webhook_payload = {
                     "object_name": storage_path,
-                    "bucket_name": "videos",
+                    "bucket_name": "sermons",
                     "metadata": {
                         "media_id": prepare_data['media_id'],
                         "client_id": self.client_id,
@@ -249,7 +249,7 @@ class TestQuickFlow:
                     print(f"   Client Name:   {self.client_name}")
                     print(f"   Media ID:      {prepare_data['media_id']}")
                     print(f"   Storage Path:  {storage_path}")
-                    print(f"   File in Storage: Check 'videos' bucket for: {storage_path}")
+                    print(f"   File in Storage: Check 'sermons' bucket for: {storage_path}")
                     print(f"   Media Record: Check 'media' table for media_id: {prepare_data['media_id']}")
                 else:
                     print(f"❌ Webhook processing failed: {webhook_response.status_code}")

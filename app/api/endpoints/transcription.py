@@ -160,7 +160,7 @@ async def prepare_upload(
         logger.info(f"File category detected: {file_category.value}, Processing type: {processing_requirements['processing_type']}")
         
         # 3. STORAGE PATH GENERATION WITH USER CONTEXT
-        storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/videos/{request.filename}"
+        storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/uploads/{request.filename}"
         
         # 4. DATABASE PREPARATION - Create media record in "preparing" state
         logger.info(f"Creating media record for {request.filename}")
@@ -271,7 +271,7 @@ async def transcribe_upload(
             logger.info(f"Creating video record for {file.filename} ({file_size_mb}MB)")
             
             # Create storage path using settings prefix
-            storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/videos/{file.filename}"
+            storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/uploads/{file.filename}"
             
             # Create media record first
             video = await supabase_service.create_media(
@@ -787,7 +787,7 @@ async def handle_upload_complete(request: Request):
             raise HTTPException(status_code=400, detail="Missing object_name in webhook")
         
         # With RLS approach, we need to extract context from the storage path and media record
-        # Parse client_id from storage path: uploads/{client_id}/videos/filename.mp4
+        # Parse client_id from storage path: clients/{client_id}/uploads/filename.mp3
         path_parts = object_name.split("/")
         if len(path_parts) < 3:
             logger.error(f"❌ Invalid storage path format: {object_name}")
@@ -844,9 +844,10 @@ async def handle_upload_complete(request: Request):
         logger.info(f"✅ Updated media {media_id} status to completed")
         
         # Start background processing based on file type (SMART ROUTING)
+        transcript_id = None
         if file_category == "audio":
             logger.info(f"🎵 Starting audio processing pipeline")
-            await start_audio_transcription_background(
+            transcript_id = await start_audio_transcription_background(
                 media_id=media_id,
                 storage_path=object_name,
                 client_id=client_id,
@@ -854,7 +855,7 @@ async def handle_upload_complete(request: Request):
             )
         elif file_category == "video":
             logger.info(f"🎬 Starting video processing pipeline (audio extraction)")
-            await start_video_processing_background(
+            transcript_id = await start_video_processing_background(
                 media_id=media_id,
                 storage_path=object_name,
                 client_id=client_id,
@@ -868,6 +869,7 @@ async def handle_upload_complete(request: Request):
             "status": "success",
             "message": "Upload processed and transcription started",
             "media_id": media_id,
+            "transcript_id": str(transcript_id) if transcript_id else None,
             "processing_type": processing_type,
             "processed_at": datetime.now(UTC).isoformat()
         }
@@ -881,13 +883,14 @@ async def handle_upload_complete(request: Request):
             detail=f"Upload webhook processing failed: {str(e)}"
         )
 
-async def start_audio_transcription_background(media_id: str, storage_path: str, client_id: str, user_id: str):
-    """Background audio processing - direct transcription"""
+async def start_audio_transcription_background(media_id: str, storage_path: str, client_id: str, user_id: str) -> str:
+    """Background audio processing - direct transcription, returns transcript_id"""
     try:
         logger.info(f"🎵 Starting audio transcription for media {media_id}")
         
-        # Create transcript record
-        transcript = await supabase_service.create_transcript(
+        # Create transcript record with proper user context
+        # Use system method to preserve user_id for audit fields
+        transcript = await supabase_service.create_transcript_system(
             TranscriptCreate(
                 video_id=media_id,  # Using media_id for consistency
                 client_id=client_id,
@@ -897,10 +900,12 @@ async def start_audio_transcription_background(media_id: str, storage_path: str,
                     "processing_type": "direct_audio"
                 }
             ),
-            user_id,
-            settings.SUPABASE_SERVICE_ROLE_KEY  # Service role for background processing
+            user_id  # Pass user_id to maintain audit context
         )
         logger.info(f"✅ Created transcript record: {transcript.id}")
+        
+        # Store transcript_id to return
+        transcript_id = transcript.id
         
         # Get signed URL for Deepgram
         audio_signed_url = await supabase_service.get_signed_url(
@@ -920,18 +925,22 @@ async def start_audio_transcription_background(media_id: str, storage_path: str,
             user_id
         )
         
+        # Return transcript_id for webhook response
+        return str(transcript_id)
+        
     except Exception as e:
         logger.error(f"❌ Audio transcription background processing failed: {str(e)}", exc_info=True)
         # Update transcript status to failed if it was created
-        if 'transcript' in locals():
+        if 'transcript_id' in locals():
             await supabase_service.update_transcript_system(
-                transcript.id,
+                transcript_id,
                 {"status": "failed", "error_message": str(e)},
                 user_id
             )
+        raise
 
-async def start_video_processing_background(media_id: str, storage_path: str, client_id: str, user_id: str):
-    """Background video processing with audio extraction"""
+async def start_video_processing_background(media_id: str, storage_path: str, client_id: str, user_id: str) -> str:
+    """Background video processing with audio extraction, returns transcript_id"""
     try:
         logger.info(f"🎬 Starting video processing for media {media_id}")
         
@@ -944,8 +953,9 @@ async def start_video_processing_background(media_id: str, storage_path: str, cl
         )
         logger.info(f"✅ Audio extracted to: {audio_storage_path}")
         
-        # Create transcript record
-        transcript = await supabase_service.create_transcript(
+        # Create transcript record with proper user context
+        # Use system method to preserve user_id for audit fields
+        transcript = await supabase_service.create_transcript_system(
             TranscriptCreate(
                 video_id=media_id,  # Using media_id for consistency
                 client_id=client_id,
@@ -956,10 +966,12 @@ async def start_video_processing_background(media_id: str, storage_path: str, cl
                     "processing_type": "video_extraction"
                 }
             ),
-            user_id,
-            settings.SUPABASE_SERVICE_ROLE_KEY
+            user_id  # Pass user_id to maintain audit context
         )
         logger.info(f"✅ Created transcript record: {transcript.id}")
+        
+        # Store transcript_id to return
+        transcript_id = transcript.id
         
         # Get signed URL for extracted audio
         audio_signed_url = await supabase_service.get_signed_url(
@@ -979,15 +991,19 @@ async def start_video_processing_background(media_id: str, storage_path: str, cl
             user_id
         )
         
+        # Return transcript_id for webhook response
+        return str(transcript_id)
+        
     except Exception as e:
         logger.error(f"❌ Video processing background processing failed: {str(e)}", exc_info=True)
         # Update transcript status to failed if it was created
-        if 'transcript' in locals():
+        if 'transcript_id' in locals():
             await supabase_service.update_transcript_system(
-                transcript.id,
+                transcript_id,
                 {"status": "failed", "error_message": str(e)},
                 user_id
             )
+        raise
 
 @router.post("/callback")
 async def transcription_callback(request: Request):
