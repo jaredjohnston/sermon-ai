@@ -187,8 +187,8 @@ class Settings(BaseSettings):
 
     # Supabase Settings
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://fapjxekuyckurahbtvrt.supabase.co")
-    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "***REMOVED***")
-    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "***REMOVED***")
+    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     # Storage Settings
     STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "sermons")
     STORAGE_PATH_PREFIX: str = "clients"  # Base path for all client files
