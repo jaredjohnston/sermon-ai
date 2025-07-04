@@ -46,3 +46,13 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Internal documentation (keep private)
+SUPABASE_LARGE_FILE_UPLOAD_GUIDE.md
+SYSTEM_AUTOPSY.md
+github_issue_transcription_retrieval.md
+TESTING_GUIDE.md
+*_AUTOPSY.md
+*_INTERNAL.md*.mp4
+*.mp4.backup
+venv/
