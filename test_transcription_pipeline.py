@@ -18,7 +18,7 @@ class DirectUploadSystemTest:
     def __init__(self):
         self.base_url = "http://localhost:8000/api/v1"
         # Use existing auth token
-        self.auth_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6IkxFNkk4SGlWempGUE5GV3YiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2ZhcGp4ZWt1eWNrdXJhaGJ0dnJ0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzMzYwYjNiOS1jOGJmLTQ2MzAtODM0Ny05N2I5YjZhNzI3MGIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUxNjI3NDYxLCJpYXQiOjE3NTE2MjM4NjEsImVtYWlsIjoiamFyZWRqb2huc3RvbjAwMCt0b2tlbnRlc3RfMjAyNTA3MDRfMTExMTAwQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJqYXJlZGpvaG5zdG9uMDAwK3Rva2VudGVzdF8yMDI1MDcwNF8xMTExMDBAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiMzM2MGIzYjktYzhiZi00NjMwLTgzNDctOTdiOWI2YTcyNzBiIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTE2MjM4NjF9XSwic2Vzc2lvbl9pZCI6IjExYTZlOTFmLWViMDMtNDA4ZS1hMzM5LWNhOWJlMTMxYTEyOSIsImlzX2Fub255bW91cyI6ZmFsc2V9.kbigZyNF8JEsjC43KHSvNFh23BnS7xecNMbic79KLsw"
+        self.auth_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6IlNOWnZSYitpeFp5dXZ6WW4iLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2ZhcGp4ZWt1eWNrdXJhaGJ0dnJ0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI3ZGI3ZGQ5ZS1iZGZkLTQ5OTktOGM1Zi00MGJlZjI1YWVjYjYiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUxNjUwMDk0LCJpYXQiOjE3NTE2NDY0OTQsImVtYWlsIjoiamFyZWRqb2huc3RvbjAwMCt0b2tlbnRlc3RfMjAyNTA3MDRfMTcyODE0QGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJqYXJlZGpvaG5zdG9uMDAwK3Rva2VudGVzdF8yMDI1MDcwNF8xNzI4MTRAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiN2RiN2RkOWUtYmRmZC00OTk5LThjNWYtNDBiZWYyNWFlY2I2In0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTE2NDY0OTR9XSwic2Vzc2lvbl9pZCI6Ijk4ODAxNTA5LWQ4OTYtNGY3NC1iNzk1LTQxNzU4MTNlNDZlZiIsImlzX2Fub255bW91cyI6ZmFsc2V9.xgtgMoEdOU9o3WSw3-lgqv90z0SSjWKL_52qjKSbRXQ"
         self.headers = {
             "Authorization": f"Bearer {self.auth_token}",
             "Content-Type": "application/json"
@@ -259,7 +259,7 @@ class DirectUploadSystemTest:
                     "content_type": "video/mp4",
                     "size_bytes": 60 * 1024 * 1024 * 1024  # 60GB (over 50GB limit)
                 },
-                "expected_status": 413
+                "expected_status": 422  # Pydantic validation fails before endpoint validation
             },
             {
                 "name": "Invalid content type",
