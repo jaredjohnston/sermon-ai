@@ -53,4 +53,6 @@ SYSTEM_AUTOPSY.md
 github_issue_transcription_retrieval.md
 TESTING_GUIDE.md
 *_AUTOPSY.md
-*_INTERNAL.md
+*_INTERNAL.md*.mp4
+*.mp4.backup
+venv/
