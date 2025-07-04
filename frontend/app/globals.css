@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 20 14% 4.1%;
+    --card: 30 15% 99%;
+    --card-foreground: 20 14% 4.1%;
+    --popover: 30 15% 99%;
+    --popover-foreground: 20 14% 4.1%;
+    --primary: 240 100% 47%;
+    --primary-foreground: 30 15% 99%;
+    --secondary: 30 8% 95%;
+    --secondary-foreground: 20 14% 11%;
+    --muted: 30 8% 95%;
+    --muted-foreground: 25 8% 45%;
+    --accent: 30 8% 95%;
+    --accent-foreground: 20 14% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 30 15% 99%;
+    --border: 30 8% 85%;
+    --input: 30 8% 85%;
+    --ring: 240 100% 47%;
+    --radius: 0.375rem;
+
+    /* Sidebar variables */
+    --sidebar-background: 30 12% 97%;
+    --sidebar-foreground: 20 14% 4.1%;
+    --sidebar-primary: 240 100% 47%;
+    --sidebar-primary-foreground: 30 15% 99%;
+    --sidebar-accent: 30 8% 93%;
+    --sidebar-accent-foreground: 20 14% 11%;
+    --sidebar-border: 30 8% 82%;
+    --sidebar-ring: 240 100% 47%;
+
+    /* Warm neutral colors */
+    --warm-gray-50: 30 15% 98%;
+    --warm-gray-100: 30 12% 95%;
+    --warm-gray-200: 30 8% 88%;
+    --warm-gray-600: 25 5% 35%;
+    --warm-gray-700: 25 5% 25%;
+    --warm-gray-800: 25 5% 15%;
+    --warm-gray-900: 25 5% 9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .zorp-card {
+    @apply bg-card border-2 border-warm-gray-800 rounded-none shadow-sm;
+  }
+
+  .zorp-button {
+    @apply bg-primary hover:bg-primary/90 text-primary-foreground border-2 border-warm-gray-800 rounded-none font-semibold transition-colors duration-200;
+  }
+
+  .zorp-button-orange {
+    @apply bg-orange-500 hover:bg-orange-600 text-white border-2 border-warm-gray-800 rounded-none font-semibold transition-colors duration-200;
+  }
+
+  .zorp-hover {
+    @apply hover:bg-warm-gray-50 transition-colors duration-200;
+  }
+
+  .zorp-border {
+    @apply border-2 border-warm-gray-800;
+  }
+
+  .zorp-text-blue {
+    color: #0000ee;
+    font-weight: bold;
+  }
+
+  .bg-warm-white {
+    background-color: #fefcf9;
+  }
+
+  .bg-warm-gray-50 {
+    background-color: hsl(var(--warm-gray-50));
+  }
+
+  .bg-warm-gray-100 {
+    background-color: hsl(var(--warm-gray-100));
+  }
+
+  .bg-warm-gray-200 {
+    background-color: hsl(var(--warm-gray-200));
+  }
+
+  .bg-warm-gray-600 {
+    background-color: hsl(var(--warm-gray-600));
+  }
+
+  .bg-warm-gray-700 {
+    background-color: hsl(var(--warm-gray-700));
+  }
+
+  .bg-warm-gray-800 {
+    background-color: hsl(var(--warm-gray-800));
+  }
+
+  .bg-warm-gray-900 {
+    background-color: hsl(var(--warm-gray-900));
+  }
+
+  .text-warm-gray-600 {
+    color: hsl(var(--warm-gray-600));
+  }
+
+  .text-warm-gray-700 {
+    color: hsl(var(--warm-gray-700));
+  }
+
+  .text-warm-gray-900 {
+    color: hsl(var(--warm-gray-900));
+  }
+
+  .border-warm-gray-200 {
+    border-color: hsl(var(--warm-gray-200));
+  }
+
+  .border-warm-gray-800 {
+    border-color: hsl(var(--warm-gray-800));
+  }
+}
