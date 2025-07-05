@@ -52,7 +52,23 @@ SUPABASE_LARGE_FILE_UPLOAD_GUIDE.md
 SYSTEM_AUTOPSY.md
 github_issue_transcription_retrieval.md
 TESTING_GUIDE.md
+SERMONAI_ONBOARDING_GUIDE.md
+SUPABASE_DATABASE_GUIDE.md
+MIGRATION_PLAN.md
+CONCURRENT_AUDIO_TESTING_GUIDE.md
 *_AUTOPSY.md
-*_INTERNAL.md*.mp4
+*_INTERNAL.md
+
+# Sensitive token generation
+generate_fresh_token.py
+
+# Test files and temporary files
+test_*.py
+test_*.sh
+test_audio.*
+test_video.*
+*_test_*.mp3
+*_test_*.mp4
+*.mp4
 *.mp4.backup
 venv/
