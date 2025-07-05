@@ -71,4 +71,8 @@ test_video.*
 *_test_*.mp4
 *.mp4
 *.mp4.backup
+run_quick_test.py
+
+# Database policies and configuration (keep private)
+supabase_rls_policies.sql
 venv/
