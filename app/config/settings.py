@@ -65,87 +65,6 @@ class Settings(BaseSettings):
     }
     """
 
-    DEVOTIONAL_PROMPT: str = """
-    Create a thoughtful daily devotional based on this sermon segment. Include:
-    1. A key verse or biblical reference
-    2. Main insight from the sermon
-    3. Personal application
-    4. A reflection question
-    5. A short prayer
-
-    Sermon text:
-    {text}
-
-    Respond in JSON format with:
-    {
-        "content": "devotional text with clear sections",
-        "metadata": {
-            "key_verse": "reference",
-            "theme": "main theme"
-        }
-    }
-    """
-
-    SUMMARY_PROMPT: str = """
-    Create a concise summary of this sermon that captures:
-    1. Main theme/topic
-    2. Key points (2-3)
-    3. Scripture references
-    4. Practical takeaways
-
-    Sermon text:
-    {text}
-
-    Respond in JSON format with:
-    {
-        "content": "formatted summary with sections",
-        "metadata": {
-            "theme": "main theme",
-            "scriptures": ["list", "of", "references"]
-        }
-    }
-    """
-
-    DISCUSSION_PROMPT: str = """
-    Create engaging small group discussion questions based on this sermon:
-    - Mix of comprehension and application questions
-    - Include relevant scripture references
-    - Add follow-up questions for deeper discussion
-    - Include 1-2 real-life scenarios to discuss
-
-    Sermon text:
-    {text}
-
-    Respond in JSON format with:
-    {
-        "content": "formatted questions with clear sections",
-        "metadata": {
-            "theme": "discussion theme",
-            "scripture_focus": ["main", "verses"]
-        }
-    }
-    """
-
-    WHATS_ON_PROMPT: str = """
-    Create a clear, engaging announcement summary from this administrative segment:
-    - Upcoming events with dates/times
-    - Important announcements
-    - Any action items for the congregation
-    - Contact information if provided
-
-    Admin text:
-    {text}
-
-    Respond in JSON format with:
-    {
-        "content": "formatted announcements",
-        "metadata": {
-            "events": [{"title": "event", "date": "date"}],
-            "priority_items": ["list", "of", "priorities"]
-        }
-    }
-    """
-
     # API Settings
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_NAME: str = "Sermon AI"
@@ -157,32 +76,11 @@ class Settings(BaseSettings):
         "https://your-frontend-domain.com",
     ]
 
-    # Content Generation Settings
-    CONTENT_PROMPTS: Dict[str, Dict[str, Any]] = {
-        "sermon": {
-            "devotional": {
-                "prompt": DEVOTIONAL_PROMPT,
-                "temperature": 0.7,
-                "max_tokens": 800
-            },
-            "summary": {
-                "prompt": SUMMARY_PROMPT,
-                "temperature": 0.5,
-                "max_tokens": 400
-            },
-            "discussion_questions": {
-                "prompt": DISCUSSION_PROMPT,
-                "temperature": 0.7,
-                "max_tokens": 600
-            }
-        },
-        "admin": {
-            "whats_on": {
-                "prompt": WHATS_ON_PROMPT,
-                "temperature": 0.5,
-                "max_tokens": 500
-            }
-        }
+    # Content Generation Settings (using dynamic templates)
+    DEFAULT_GENERATION_SETTINGS: Dict[str, Any] = {
+        "temperature": 0.7,
+        "max_tokens": 800,
+        "model": "gpt-4"
     }
 
     # Supabase Settings
