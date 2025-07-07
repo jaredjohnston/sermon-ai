@@ -248,7 +248,7 @@ class AudioExtractionService:
         Raises:
             AudioExtractionError: If extraction or upload fails
         """
-        import aiohttp
+        from app.utils.http_client import http_client
         
         temp_video_path = None
         temp_audio_path = None
@@ -268,18 +268,17 @@ class AudioExtractionService:
             temp_video_path = self.temp_dir / f"temp_video_{media_id}.tmp"
             temp_audio_path = self.temp_dir / f"temp_audio_{media_id}.wav"
             
-            # Download video file
+            # Download video file using centralized HTTP client with proper SSL
             logger.info(f"📥 Downloading video from storage...")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(video_url) as response:
-                    if response.status != 200:
-                        raise AudioExtractionError(f"Failed to download video: HTTP {response.status}")
-                    
-                    with open(temp_video_path, 'wb') as f:
-                        async for chunk in response.content.iter_chunked(8192):
-                            f.write(chunk)
             
-            logger.info(f"📥 Downloaded video ({temp_video_path.stat().st_size} bytes)")
+            # Use the centralized HTTP client for reliable download
+            total_bytes = await http_client.download_file(
+                url=video_url,
+                file_path=str(temp_video_path),
+                chunk_size=8192
+            )
+            
+            logger.info(f"📥 Downloaded video ({total_bytes} bytes)")
             
             # Extract audio using existing FFmpeg logic
             logger.info(f"🎵 Extracting audio...")
