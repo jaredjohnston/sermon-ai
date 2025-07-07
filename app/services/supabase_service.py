@@ -1092,7 +1092,11 @@ class SupabaseService:
             if hasattr(signed_url_response, 'error') and signed_url_response.error:
                 raise DatabaseError(f"Failed to create signed URL: {signed_url_response.error}")
             
-            signed_url = signed_url_response.get('signedURL')
+            # Handle both dict and object response formats
+            if hasattr(signed_url_response, 'get'):
+                signed_url = signed_url_response.get('signedURL')
+            else:
+                signed_url = signed_url_response['signedURL']
             
             self.logger.info(f"Generated signed URL for {path} (expires in {expires_in}s)")
             return signed_url
