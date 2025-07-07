@@ -11,7 +11,7 @@ from app.services.audio_cleanup_service import audio_cleanup_service
 from app.services.file_type_service import file_type_service, FileCategory
 from app.services.audio_service import audio_service, AudioProcessingError
 from app.middleware.auth import get_current_user, get_auth_context, AuthContext
-from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate, PrepareUploadRequest, PrepareUploadResponse
+from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate, PrepareUploadRequest, PrepareUploadResponse, TUSConfig
 from datetime import datetime, UTC, timedelta
 import json
 
@@ -182,14 +182,58 @@ async def prepare_upload(
         )
         logger.info(f"Media record created: {media.id}")
         
-        # 5. SIMPLE SUPABASE UPLOAD URL (same as our API was using)
-        logger.info(f"Generating direct Supabase upload URL for: {storage_path}")
-        
-        # Just give frontend the same TUS endpoint our API was using
+        # 5. SMART UPLOAD URL GENERATION BASED ON FILE SIZE
         supabase_base = settings.SUPABASE_URL.rstrip('/')
-        upload_url = f"{supabase_base}/storage/v1/object/{settings.STORAGE_BUCKET}/{storage_path}"
         
-        logger.info(f"Direct upload URL: {upload_url}")
+        # Determine upload method based on file size threshold
+        tus_config = None
+        if request.size_bytes > settings.TUS_THRESHOLD:
+            # Large file - use TUS resumable upload
+            logger.info(f"Using TUS resumable upload for large file: {request.size_bytes / 1024 / 1024:.2f}MB")
+            
+            upload_url = f"{supabase_base}/storage/v1/upload/resumable"
+            upload_headers = {
+                "Authorization": f"Bearer {auth.access_token}",
+                "Content-Type": request.content_type,
+                "x-upsert": "true"
+            }
+            upload_method = "tus_resumable"
+            
+            # Create TUS configuration for resumable uploads
+            tus_config = TUSConfig(
+                upload_url=upload_url,
+                headers={
+                    "Authorization": f"Bearer {auth.access_token}",
+                    "tus-resumable": "1.0.0",
+                    "x-upsert": "true"
+                },
+                metadata={
+                    "bucketName": settings.STORAGE_BUCKET,
+                    "objectName": storage_path,
+                    "contentType": request.content_type,
+                    "cacheControl": "3600"
+                },
+                chunk_size=getattr(settings, 'TUS_CHUNK_SIZE', 6 * 1024 * 1024),
+                max_retries=3,
+                retry_delay=1000,
+                timeout=30000,
+                parallel_uploads=1
+            )
+            
+        else:
+            # Small file - use standard HTTP PUT
+            logger.info(f"Using standard HTTP PUT for small file: {request.size_bytes / 1024 / 1024:.2f}MB")
+            
+            upload_url = f"{supabase_base}/storage/v1/object/{settings.STORAGE_BUCKET}/{storage_path}"
+            upload_headers = {
+                "Authorization": f"Bearer {auth.access_token}",
+                "Content-Type": request.content_type,
+                "x-upsert": "true"
+            }
+            upload_method = "http_put"
+        
+        logger.info(f"Upload URL generated: {upload_url}")
+        logger.info(f"Upload method: {upload_method}")
         
         # 6. SUCCESS RESPONSE  
         processing_info = {
@@ -198,23 +242,18 @@ async def prepare_upload(
             "audio_extraction_needed": processing_requirements["needs_audio_extraction"],
             "video_upload_needed": processing_requirements["needs_video_upload"],
             "estimated_processing_time": f"~{max(2, int(request.size_bytes / 1024 / 1024 / 100))} minutes",
-            "upload_method": "direct_user_auth"
+            "upload_method": upload_method
         }
         
-        logger.info(f"Upload preparation successful for media {media.id}")
-        
-        # User uploads with their own JWT token (secure)
-        upload_headers = {
-            "Authorization": f"Bearer {auth.access_token}",  # USER'S token, not service role
-            "Content-Type": request.content_type,
-            "x-upsert": "true"
-        }
+        logger.info(f"Upload preparation successful for media {media.id} using {upload_method}")
         
         return PrepareUploadResponse(
             upload_url=upload_url,
             upload_fields=upload_headers,  # User-authenticated headers
             media_id=str(media.id),
             processing_info=processing_info,
+            upload_method=upload_method,
+            tus_config=tus_config,
             expires_in=3600
         )
         
@@ -339,7 +378,7 @@ async def transcribe_upload(
                 TranscriptCreate(
                     video_id=video.id,
                     client_id=client.id,
-                    status="uploading",  # Initial status
+                    status="pending",  # Initial status - will be updated to processing when transcription starts
                     request_id=None,
                     metadata={"audio_storage_path": audio_storage_path, "audio_signed_url": audio_signed_url}
                 ),

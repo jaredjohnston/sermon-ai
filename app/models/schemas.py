@@ -416,12 +416,26 @@ class PrepareUploadRequest(BaseModel):
     content_type: str = Field(..., pattern=r'^(video|audio|text|application)/[\w\.-]+$')
     size_bytes: int = Field(..., gt=0, le=50 * 1024 * 1024 * 1024)  # 50GB max
 
+class TUSConfig(BaseModel):
+    """TUS resumable upload configuration"""
+    upload_url: str = Field(..., description="TUS upload endpoint URL")
+    headers: Dict[str, str] = Field(..., description="Required headers for TUS upload")
+    metadata: Dict[str, str] = Field(..., description="TUS metadata for the upload")
+    chunk_size: int = Field(default=6 * 1024 * 1024, description="Recommended chunk size in bytes")
+    max_retries: int = Field(default=3, description="Maximum number of retry attempts")
+    retry_delay: int = Field(default=1000, description="Delay between retries in milliseconds")
+    timeout: int = Field(default=30000, description="Request timeout in milliseconds")
+    parallel_uploads: int = Field(default=1, description="Number of parallel chunk uploads")
+    store_url: Optional[str] = Field(None, description="URL to store upload progress/state")
+
 class PrepareUploadResponse(BaseModel):
     """Response from upload preparation"""
     upload_url: str
     upload_fields: Dict[str, Any]
     media_id: str
     processing_info: Dict[str, Any]
+    upload_method: str = Field(description="Upload method: 'http_put' or 'tus_resumable'")
+    tus_config: Optional[TUSConfig] = Field(None, description="TUS configuration for resumable uploads")
     expires_in: int = Field(default=3600)  # 1 hour
 
 class UploadStatusResponse(BaseModel):
