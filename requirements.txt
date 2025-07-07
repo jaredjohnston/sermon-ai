@@ -1,13 +1,29 @@
+# Core FastAPI dependencies
 fastapi==0.109.2
 uvicorn==0.27.1
 pydantic==2.6.1
 pydantic-settings==2.1.0
 python-dotenv==1.0.1
+
+# AI/ML API integrations
 openai==1.12.0
 deepgram-sdk==4.1.0
+
+# HTTP and file handling
 python-multipart==0.0.9
 aiohttp==3.9.3
 httpx==0.26.0
+requests>=2.31.0
+
+# SSL certificate handling
+certifi>=2024.0.0
+
+# Audio/video processing
+ffmpeg-python>=0.2.0
+
+# Database and authentication
+supabase>=2.0.0
+email-validator>=2.0.0
 
 # File upload dependencies
 pytus>=0.2.1
