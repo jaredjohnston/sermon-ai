@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TUS Upload Frontend Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/tus-js-client@3.1.3/dist/tus.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4caf50;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 2px 0;
+        }
+        .log-error { color: #dc3545; }
+        .log-success { color: #28a745; }
+        .log-info { color: #17a2b8; }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .config-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .file-info {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 TUS Upload Frontend Test</h1>
+        <p>Test TUS resumable uploads with real frontend JavaScript client</p>
+        
+        <div class="config-section">
+            <h3>📋 Configuration</h3>
+            <label for="apiUrl">API URL:</label>
+            <input type="text" id="apiUrl" value="http://localhost:8000/api/v1" style="width: 300px; margin-left: 10px;">
+            <br><br>
+            <label for="authToken">Auth Token:</label>
+            <input type="text" id="authToken" value="eyJhbGciOiJIUzI1NiIsImtpZCI6IlNOWnZSYitpeFp5dXZ6WW4iLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2ZhcGp4ZWt1eWNrdXJhaGJ0dnJ0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI4YmQxZDE1Ni1kMjI2LTRjZDYtYjdjMi04NTYxNzllNzdhM2IiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUxOTcyMTY0LCJpYXQiOjE3NTE5Njg1NjQsImVtYWlsIjoiamFyZWRqb2huc3RvbjAwMCt0b2tlbnRlc3RfMjAyNTA3MDhfMTA1NjAzQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJqYXJlZGpvaG5zdG9uMDAwK3Rva2VudGVzdF8yMDI1MDcwOF8xMDU2MDNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiOGJkMWQxNTYtZDIyNi00Y2Q2LWI3YzItODU2MTc5ZTc3YTNiIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTE5Njg1NjR9XSwic2Vzc2lvbl9pZCI6IjAzNmE1ZjNhLTg3MzQtNDZiMS04YTYzLWZkMzA4NzBhYWVjYSIsImlzX2Fub255bW91cyI6ZmFsc2V9.rIdcuk66ZuDAe1fSa9mwUwZaLlZx3zMUbHes1HkCHUo" style="width: 500px; margin-left: 10px;">
+            <br><br>
+            <button class="btn" onclick="testConnection()">🔍 Test API Connection</button>
+        </div>
+
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+            <h3>📁 Select File to Upload</h3>
+            <p>Click here or drag and drop your 86MB audio file</p>
+            <p><small>Recommended: full_sermon_test_86mb.mp3</small></p>
+        </div>
+        
+        <input type="file" id="fileInput" accept="audio/*,video/*" style="display: none;">
+        
+        <div id="fileInfo" class="file-info" style="display: none;">
+            <h4>📊 File Information</h4>
+            <div id="fileDetails"></div>
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <h4>📤 Upload Progress</h4>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="progressText">0% (0 MB / 0 MB)</div>
+            <div id="speedText">Speed: 0 MB/s</div>
+        </div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <button class="btn" id="uploadBtn" onclick="startUpload()" disabled>🚀 Start TUS Upload</button>
+            <button class="btn" id="pauseBtn" onclick="pauseUpload()" disabled>⏸️ Pause</button>
+            <button class="btn" id="resumeBtn" onclick="resumeUpload()" disabled>▶️ Resume</button>
+            <button class="btn" onclick="clearLog()">🗑️ Clear Log</button>
+        </div>
+        
+        <div class="log" id="log">
+            <div class="log-entry log-info">Ready to test TUS upload...</div>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-radius: 5px;">
+            <h4>👀 What to verify after upload:</h4>
+            <ol>
+                <li><strong>Supabase Storage:</strong> Go to Storage → 'sermons' bucket → look for your file</li>
+                <li><strong>Database:</strong> Check 'media' and 'transcripts' tables for new records</li>
+                <li><strong>File Size:</strong> Verify uploaded file matches original size</li>
+                <li><strong>Progress:</strong> Watch real-time chunk upload progress</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        let upload = null;
+        let uploadStartTime = null;
+
+        // Configure drag and drop
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '<div class="log-entry log-info">Log cleared...</div>';
+        }
+
+        function handleFileSelect(file) {
+            selectedFile = file;
+            
+            const fileInfo = document.getElementById('fileInfo');
+            const fileDetails = document.getElementById('fileDetails');
+            
+            fileDetails.innerHTML = `
+                <strong>Name:</strong> ${file.name}<br>
+                <strong>Size:</strong> ${(file.size / 1024 / 1024).toFixed(1)} MB (${file.size.toLocaleString()} bytes)<br>
+                <strong>Type:</strong> ${file.type}<br>
+                <strong>Modified:</strong> ${new Date(file.lastModified).toLocaleString()}
+            `;
+            
+            fileInfo.style.display = 'block';
+            document.getElementById('uploadBtn').disabled = false;
+            
+            log(`File selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`, 'info');
+            
+            if (file.size > 6 * 1024 * 1024) {
+                log('✅ File size > 6MB - will use TUS resumable upload', 'success');
+            } else {
+                log('ℹ️ File size ≤ 6MB - will use HTTP PUT upload', 'info');
+            }
+        }
+
+        async function testConnection() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            log('🔍 Testing API connection...', 'info');
+            
+            try {
+                const response = await fetch(`${apiUrl}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ API connection successful: ${data.status}`, 'success');
+                } else {
+                    log(`❌ API connection failed: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ API connection error: ${error.message}`, 'error');
+            }
+        }
+
+        async function prepareUpload() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const authToken = document.getElementById('authToken').value;
+            
+            if (!authToken) {
+                log('❌ Please enter your auth token', 'error');
+                return null;
+            }
+            
+            // Add timestamp to filename to avoid duplicates
+            const timestamp = Date.now();
+            const fileExtension = selectedFile.name.split('.').pop();
+            const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
+            const uniqueFilename = `${baseName}_${timestamp}.${fileExtension}`;
+            
+            const payload = {
+                filename: uniqueFilename,
+                content_type: selectedFile.type,
+                size_bytes: selectedFile.size
+            };
+            
+            log('📋 Preparing upload configuration...', 'info');
+            log(`Using unique filename: ${uniqueFilename}`, 'info');
+            log(`Request: ${JSON.stringify(payload, null, 2)}`, 'info');
+            
+            try {
+                const response = await fetch(`${apiUrl}/transcription/upload/prepare`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`❌ Prepare failed: ${response.status} - ${errorText}`, 'error');
+                    return null;
+                }
+                
+                const config = await response.json();
+                log(`✅ Upload configuration received`, 'success');
+                log(`Upload method: ${config.upload_method}`, 'info');
+                log(`Media ID: ${config.media_id}`, 'info');
+                
+                if (config.tus_config) {
+                    log(`TUS endpoint: ${config.tus_config.upload_url}`, 'info');
+                    log(`Chunk size: ${(config.tus_config.chunk_size / 1024 / 1024).toFixed(1)}MB`, 'info');
+                }
+                
+                return config;
+                
+            } catch (error) {
+                log(`❌ Prepare error: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
+        async function startUpload() {
+            if (!selectedFile) {
+                log('❌ No file selected', 'error');
+                return;
+            }
+            
+            const config = await prepareUpload();
+            if (!config) {
+                return;
+            }
+            
+            // Show progress container
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            
+            uploadStartTime = Date.now();
+            
+            if (config.upload_method === 'tus_resumable' && config.tus_config) {
+                // TUS resumable upload
+                log('🚀 Starting TUS resumable upload...', 'info');
+                
+                // Remove tus-resumable header since tus-js-client handles it automatically
+                const clientHeaders = { ...config.tus_config.headers };
+                delete clientHeaders['tus-resumable'];
+                
+                upload = new tus.Upload(selectedFile, {
+                    endpoint: config.tus_config.upload_url,
+                    headers: clientHeaders,
+                    metadata: config.tus_config.metadata,
+                    chunkSize: config.tus_config.chunk_size,
+                    retryDelays: [0, 1000, 3000, 5000],
+                    
+                    onError: function(error) {
+                        log(`❌ Upload error: ${error.message}`, 'error');
+                        resetUploadButtons();
+                    },
+                    
+                    onProgress: function(bytesUploaded, bytesTotal) {
+                        const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(1);
+                        const uploadedMB = (bytesUploaded / 1024 / 1024).toFixed(1);
+                        const totalMB = (bytesTotal / 1024 / 1024).toFixed(1);
+                        
+                        // Update progress bar
+                        document.getElementById('progressFill').style.width = percentage + '%';
+                        document.getElementById('progressText').textContent = 
+                            `${percentage}% (${uploadedMB} MB / ${totalMB} MB)`;
+                        
+                        // Calculate speed
+                        const elapsedTime = (Date.now() - uploadStartTime) / 1000;
+                        const speed = (bytesUploaded / 1024 / 1024) / elapsedTime;
+                        document.getElementById('speedText').textContent = 
+                            `Speed: ${speed.toFixed(1)} MB/s`;
+                        
+                        log(`Progress: ${percentage}% (${uploadedMB}MB/${totalMB}MB) - ${speed.toFixed(1)}MB/s`, 'info');
+                    },
+                    
+                    onSuccess: function() {
+                        log('🎉 Upload completed successfully!', 'success');
+                        log('👀 Check Supabase Storage dashboard to verify file', 'success');
+                        resetUploadButtons();
+                    }
+                });
+                
+                upload.start();
+                
+            } else {
+                // HTTP PUT upload
+                log('📤 Starting HTTP PUT upload...', 'info');
+                
+                try {
+                    const response = await fetch(config.upload_url, {
+                        method: 'PUT',
+                        headers: config.upload_fields,
+                        body: selectedFile
+                    });
+                    
+                    if (response.ok) {
+                        log('✅ HTTP PUT upload completed!', 'success');
+                        document.getElementById('progressFill').style.width = '100%';
+                        document.getElementById('progressText').textContent = '100% Complete';
+                    } else {
+                        log(`❌ HTTP PUT upload failed: ${response.status}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    log(`❌ HTTP PUT upload error: ${error.message}`, 'error');
+                }
+                
+                resetUploadButtons();
+            }
+        }
+
+        function pauseUpload() {
+            if (upload) {
+                upload.abort();
+                log('⏸️ Upload paused', 'info');
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('resumeBtn').disabled = false;
+            }
+        }
+
+        function resumeUpload() {
+            if (upload) {
+                upload.start();
+                log('▶️ Upload resumed', 'info');
+                document.getElementById('pauseBtn').disabled = false;
+                document.getElementById('resumeBtn').disabled = true;
+            }
+        }
+
+        function resetUploadButtons() {
+            document.getElementById('uploadBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('resumeBtn').disabled = true;
+        }
+    </script>
+</body>
+</html>
