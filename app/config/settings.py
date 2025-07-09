@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Callback Settings
     CALLBACK_URL: str = os.getenv("CALLBACK_URL", "http://localhost:8000/api/v1/transcription/callback")
     
+    # Webhook Security
+    WEBHOOK_SECRET_TOKEN: str = os.getenv("WEBHOOK_SECRET_TOKEN", "default-webhook-secret-change-in-production")
+    FASTAPI_BASE_URL: str = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
+    
     # Media Types
     ALLOWED_AUDIO_TYPES: List[str] = [
         "audio/mpeg", "audio/wav", "audio/mp3", "audio/x-m4a",

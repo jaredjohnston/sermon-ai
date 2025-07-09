@@ -110,7 +110,7 @@
             <input type="text" id="apiUrl" value="http://localhost:8000/api/v1" style="width: 300px; margin-left: 10px;">
             <br><br>
             <label for="authToken">Auth Token:</label>
-            <input type="text" id="authToken" value="eyJhbGciOiJIUzI1NiIsImtpZCI6IlNOWnZSYitpeFp5dXZ6WW4iLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2ZhcGp4ZWt1eWNrdXJhaGJ0dnJ0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI4YmQxZDE1Ni1kMjI2LTRjZDYtYjdjMi04NTYxNzllNzdhM2IiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUxOTcyMTY0LCJpYXQiOjE3NTE5Njg1NjQsImVtYWlsIjoiamFyZWRqb2huc3RvbjAwMCt0b2tlbnRlc3RfMjAyNTA3MDhfMTA1NjAzQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJqYXJlZGpvaG5zdG9uMDAwK3Rva2VudGVzdF8yMDI1MDcwOF8xMDU2MDNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiOGJkMWQxNTYtZDIyNi00Y2Q2LWI3YzItODU2MTc5ZTc3YTNiIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTE5Njg1NjR9XSwic2Vzc2lvbl9pZCI6IjAzNmE1ZjNhLTg3MzQtNDZiMS04YTYzLWZkMzA4NzBhYWVjYSIsImlzX2Fub255bW91cyI6ZmFsc2V9.rIdcuk66ZuDAe1fSa9mwUwZaLlZx3zMUbHes1HkCHUo" style="width: 500px; margin-left: 10px;">
+            <input type="text" id="authToken" value="eyJhbGciOiJIUzI1NiIsImtpZCI6IlNOWnZSYitpeFp5dXZ6WW4iLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2ZhcGp4ZWt1eWNrdXJhaGJ0dnJ0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIyZTU0Y2Q3Ny04MDUxLTRjMGEtOTA3ZC00YzI1MGNiMDU0YzAiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUyMDgwMDczLCJpYXQiOjE3NTIwNzY0NzMsImVtYWlsIjoiamFyZWRqb2huc3RvbjAwMCt0b2tlbnRlc3RfMjAyNTA3MDlfMTY1NDMyQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJqYXJlZGpvaG5zdG9uMDAwK3Rva2VudGVzdF8yMDI1MDcwOV8xNjU0MzJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiMmU1NGNkNzctODA1MS00YzBhLTkwN2QtNGMyNTBjYjA1NGMwIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTIwNzY0NzN9XSwic2Vzc2lvbl9pZCI6IjFiODFlMTNlLWZlY2YtNDkwZC1iN2Y0LWY1MDk0MTE0NTUyNyIsImlzX2Fub255bW91cyI6ZmFsc2V9.O_Q5n2kfPT-8th1Jz2S6Yl_IOKxDxjJwdnTP4GiYSlY" style="width: 500px; margin-left: 10px;">
             <br><br>
             <button class="btn" onclick="testConnection()">🔍 Test API Connection</button>
         </div>
@@ -247,6 +247,7 @@
             }
         }
 
+
         async function prepareUpload() {
             const apiUrl = document.getElementById('apiUrl').value;
             const authToken = document.getElementById('authToken').value;
@@ -365,7 +366,8 @@
                     
                     onSuccess: function() {
                         log('🎉 Upload completed successfully!', 'success');
-                        log('👀 Check Supabase Storage dashboard to verify file', 'success');
+                        log('🎯 Dashboard Webhook should automatically trigger transcription!', 'success');
+                        log('👀 Check Supabase Edge Function logs for webhook activity', 'info');
                         resetUploadButtons();
                     }
                 });

@@ -810,51 +810,50 @@ async def handle_upload_complete(request: Request):
     try:
         logger.info("🔔 Upload completion webhook received")
         
+        # Verify webhook authentication
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            logger.error("❌ Missing or invalid Authorization header")
+            raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+        
+        token = auth_header.split(" ")[1]
+        if token != settings.WEBHOOK_SECRET_TOKEN:
+            logger.error("❌ Invalid webhook token")
+            raise HTTPException(status_code=401, detail="Invalid webhook token")
+        
+        logger.info("✅ Webhook authentication verified")
+        
         # Parse webhook payload
         body = await request.body()
         webhook_data = json.loads(body.decode('utf-8'))
         
         logger.info(f"Webhook data: {json.dumps(webhook_data, indent=2)[:500]}...")
         
-        # Extract metadata from webhook
-        object_name = webhook_data.get("object_name") or webhook_data.get("name")
-        bucket_name = webhook_data.get("bucket_name") or webhook_data.get("bucket")
-        metadata = webhook_data.get("metadata", {})
-        
-        if not object_name:
-            logger.error("❌ No object_name found in webhook data")
-            raise HTTPException(status_code=400, detail="Missing object_name in webhook")
-        
-        # With RLS approach, we need to extract context from the storage path and media record
-        # Parse client_id from storage path: clients/{client_id}/uploads/filename.mp3
-        path_parts = object_name.split("/")
-        if len(path_parts) < 3:
-            logger.error(f"❌ Invalid storage path format: {object_name}")
-            raise HTTPException(status_code=400, detail="Invalid storage path format")
-        
-        client_id = path_parts[1]  # Extract client_id from path
-        filename = path_parts[-1]  # Extract filename
-        
-        # Find media record by filename and client_id
-        try:
-            media_records = await supabase_service.get_media_by_filename_and_client(
-                filename=filename,
-                client_id=client_id,
-                access_token=settings.SUPABASE_SERVICE_ROLE_KEY
-            )
+        # Handle both Edge Function and Dashboard Webhook formats
+        if webhook_data.get("type") == "UPDATE" and webhook_data.get("table") == "media":
+            # Dashboard Webhook format
+            logger.info("📋 Processing Dashboard Webhook format")
             
-            if not media_records:
-                logger.error(f"❌ No media record found for {filename} in client {client_id}")
-                raise HTTPException(status_code=404, detail="Media record not found")
+            record = webhook_data.get("record", {})
+            old_record = webhook_data.get("old_record", {})
             
-            # Get the most recent media record (in case of duplicates)
-            media = media_records[0]
-            media_metadata = media.metadata or {}
+            # Check if upload_status changed to 'completed'
+            if record.get("upload_status") != "completed":
+                logger.info(f"ℹ️ Upload status is '{record.get('upload_status')}', not 'completed' - ignoring")
+                return {"message": "Upload status not completed - ignored"}
             
-            media_id = str(media.id)
-            user_id = str(media.created_by)
+            if old_record.get("upload_status") == "completed":
+                logger.info("ℹ️ Upload was already completed - ignoring duplicate")
+                return {"message": "Upload already completed - ignored"}
+                
+            # Extract media details from record
+            media_id = str(record.get("id"))
+            user_id = str(record.get("created_by"))
+            client_id = str(record.get("client_id"))
+            filename = record.get("filename")
+            media_metadata = record.get("metadata", {})
+            
             file_category = media_metadata.get("file_category", "unknown")
-            needs_audio_extraction = media_metadata.get("needs_audio_extraction", False)
             processing_type = media_metadata.get("processing_type", "unknown")
             
             logger.info(f"📋 Processing upload completion for {file_category} file")
@@ -863,24 +862,83 @@ async def handle_upload_complete(request: Request):
             logger.info(f"   User ID: {user_id}")
             logger.info(f"   Processing type: {processing_type}")
             
-        except Exception as e:
-            logger.error(f"❌ Failed to get media record: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to get media record: {str(e)}")
+        else:
+            # Edge Function format (for manual testing)
+            logger.info("📋 Processing Edge Function format")
+            
+            object_name = webhook_data.get("object_name") or webhook_data.get("name")
+            bucket_name = webhook_data.get("bucket_name") or webhook_data.get("bucket")
+            metadata = webhook_data.get("metadata", {})
+            
+            if not object_name:
+                logger.error("❌ No object_name found in webhook data")
+                raise HTTPException(status_code=400, detail="Missing object_name in webhook")
+            
+            # Parse client_id from storage path: clients/{client_id}/uploads/filename.mp3
+            path_parts = object_name.split("/")
+            if len(path_parts) < 3:
+                logger.error(f"❌ Invalid storage path format: {object_name}")
+                raise HTTPException(status_code=400, detail="Invalid storage path format")
+            
+            client_id = path_parts[1]  # Extract client_id from path
+            filename = path_parts[-1]  # Extract filename
+            
+            # Find media record by filename and client_id
+            try:
+                media_records = await supabase_service.get_media_by_filename_and_client(
+                    filename=filename,
+                    client_id=client_id,
+                    access_token=settings.SUPABASE_SERVICE_ROLE_KEY
+                )
+                
+                if not media_records:
+                    logger.error(f"❌ No media record found for {filename} in client {client_id}")
+                    raise HTTPException(status_code=404, detail="Media record not found")
+                
+                # Get the most recent media record (in case of duplicates)
+                media = media_records[0]
+                media_metadata = media.metadata or {}
+                
+                media_id = str(media.id)
+                user_id = str(media.created_by)
+                file_category = media_metadata.get("file_category", "unknown")
+                needs_audio_extraction = media_metadata.get("needs_audio_extraction", False)
+                processing_type = media_metadata.get("processing_type", "unknown")
+                
+                logger.info(f"📋 Processing upload completion for {file_category} file")
+                logger.info(f"   Media ID: {media_id}")
+                logger.info(f"   Client ID: {client_id}")
+                logger.info(f"   User ID: {user_id}")
+                logger.info(f"   Processing type: {processing_type}")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to get media record: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Failed to get media record: {str(e)}")
         
-        # Update media status to completed
-        await supabase_service.update_media(
-            media_id,
-            {
-                "metadata": {
-                    **metadata,
-                    "upload_status": "completed",
-                    "storage_url": object_name,
-                    "webhook_received_at": datetime.now(UTC).isoformat()
-                }
-            },
-            user_id
-        )
-        logger.info(f"✅ Updated media {media_id} status to completed")
+        # For Dashboard Webhook format, status is already completed
+        # For Edge Function format, update media status to completed
+        if webhook_data.get("type") != "UPDATE":
+            await supabase_service.update_media(
+                media_id,
+                {
+                    "metadata": {
+                        **media_metadata,
+                        "webhook_received_at": datetime.now(UTC).isoformat()
+                    }
+                },
+                user_id
+            )
+            logger.info(f"✅ Updated media {media_id} with webhook timestamp")
+        else:
+            logger.info(f"✅ Media {media_id} already completed via Dashboard Webhook")
+        
+        # Construct storage_path for background processing
+        if webhook_data.get("type") == "UPDATE":
+            # Dashboard Webhook format - construct path from database record
+            storage_path = f"clients/{client_id}/uploads/{filename}"
+        else:
+            # Edge Function format - use object_name
+            storage_path = object_name
         
         # Start background processing based on file type (SMART ROUTING)
         transcript_id = None
@@ -888,7 +946,7 @@ async def handle_upload_complete(request: Request):
             logger.info(f"🎵 Starting audio processing pipeline")
             transcript_id = await start_audio_transcription_background(
                 media_id=media_id,
-                storage_path=object_name,
+                storage_path=storage_path,
                 client_id=client_id,
                 user_id=user_id
             )
@@ -896,7 +954,7 @@ async def handle_upload_complete(request: Request):
             logger.info(f"🎬 Starting video processing pipeline (audio extraction)")
             transcript_id = await start_video_processing_background(
                 media_id=media_id,
-                storage_path=object_name,
+                storage_path=storage_path,
                 client_id=client_id,
                 user_id=user_id
             )
@@ -1306,3 +1364,4 @@ async def get_audio_cleanup_statistics(current_user: User = Depends(get_current_
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get statistics: {str(e)}"
         )
+
