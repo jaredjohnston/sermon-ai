@@ -92,7 +92,8 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     # Storage Settings
-    STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "sermons")
+    STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "sermons")  # User uploads & final outputs
+    PROCESSING_BUCKET: str = os.getenv("PROCESSING_BUCKET", "sermon-processing")  # System-generated files
     STORAGE_PATH_PREFIX: str = "clients"  # Base path for all client files
     
     # Audio File Settings

@@ -1071,9 +1071,9 @@ async def start_video_processing_background(media_id: str, storage_path: str, cl
         # Store transcript_id to return
         transcript_id = transcript.id
         
-        # Get signed URL for extracted audio
+        # Get signed URL for extracted audio (from processing bucket)
         audio_signed_url = await supabase_service.get_signed_url(
-            bucket=settings.STORAGE_BUCKET,
+            bucket=settings.PROCESSING_BUCKET,
             path=audio_storage_path,
             expires_in=3600
         )

@@ -97,7 +97,7 @@ class AudioExtractionService:
         Raises:
             AudioExtractionError: If extraction or upload fails
         """
-        audio_filename = f"audio_{video_id}_{uuid.uuid4().hex[:8]}.wav"
+        audio_filename = f"audio_{video_id}_{uuid.uuid4().hex[:8]}.mp3"
         audio_storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client_id}/audio/{audio_filename}"
         temp_audio_path = self.temp_dir / audio_filename
         temp_video_path = None
@@ -108,25 +108,46 @@ class AudioExtractionService:
             temp_video_path = await self.save_stream_to_temp_file(video_stream)
             
             # STEP 2: Extract audio from the saved file
+            logger.info(f"🎵 Starting audio extraction with FFmpeg...")
             await self._extract_audio_ffmpeg(temp_video_path, temp_audio_path)
+            logger.info(f"✅ Audio extraction completed successfully")
             
             # STEP 3: Immediately upload audio to Supabase 
-            logger.info(f"Immediately uploading extracted audio to Supabase: {audio_storage_path}")
-            
             with open(temp_audio_path, "rb") as audio_file:
                 audio_content = audio_file.read()
                 
-                response = self.supabase.storage.from_(settings.STORAGE_BUCKET).upload(
+                # Enhanced logging with file size and time estimates
+                audio_size_mb = len(audio_content) / 1024 / 1024
+                estimated_upload_time = max(5, audio_size_mb / 2)  # Rough estimate: 2MB/s
+                
+                logger.info(f"📤 Starting audio upload to processing bucket:")
+                logger.info(f"   📁 File: {audio_filename}")
+                logger.info(f"   📊 Size: {audio_size_mb:.1f}MB")
+                logger.info(f"   ⏱️ Estimated upload time: ~{estimated_upload_time:.0f} seconds")
+                logger.info(f"   🎯 Destination: {audio_storage_path}")
+                
+                import time
+                upload_start_time = time.time()
+                
+                response = self.supabase.storage.from_(settings.PROCESSING_BUCKET).upload(
                     audio_storage_path,
                     audio_content,
-                    file_options={"content-type": "audio/wav"}
+                    file_options={"content-type": "audio/mpeg"}
                 )
                 
+                upload_duration = time.time() - upload_start_time
+                upload_speed = audio_size_mb / upload_duration if upload_duration > 0 else 0
+                
                 if hasattr(response, 'error') and response.error:
+                    logger.error(f"❌ Upload failed after {upload_duration:.1f}s: {response.error}")
                     raise AudioExtractionError(f"Supabase upload failed: {response.error}")
+                
+                logger.info(f"✅ Audio upload completed!")
+                logger.info(f"   ⏱️ Duration: {upload_duration:.1f}s")
+                logger.info(f"   🚀 Speed: {upload_speed:.1f}MB/s")
             
             # STEP 4: Generate signed URL for Deepgram
-            signed_url_response = self.supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(
+            signed_url_response = self.supabase.storage.from_(settings.PROCESSING_BUCKET).create_signed_url(
                 audio_storage_path, 
                 60 * 60 * 24  # 24 hours
             )
@@ -185,10 +206,10 @@ class AudioExtractionService:
         """
         Synchronous FFmpeg extraction - runs in thread executor
         
-        Uses WAV format optimized for Deepgram:
-        - WAV format (better than MP3 for speech recognition)
-        - 16-bit PCM encoding
-        - 44.1kHz sample rate  
+        Uses MP3 format for efficient processing:
+        - MP3 format (smaller file size, faster uploads)
+        - 192kbps bitrate (high quality for speech)
+        - 44.1kHz sample rate (good quality)
         - Stereo (2 channels) - better quality than mono
         """
         try:
@@ -198,10 +219,11 @@ class AudioExtractionService:
                 .output(
                     output_path,
                     vn=None,  # No video
-                    acodec='pcm_s16le',  # 16-bit PCM
-                    ar=44100,  # 44.1kHz sample rate (higher quality than 16kHz)
+                    acodec='mp3',  # MP3 codec
+                    audio_bitrate='192k',  # High quality bitrate
+                    ar=44100,  # 44.1kHz sample rate
                     ac=2,  # Stereo for better quality
-                    f='wav'  # WAV format
+                    f='mp3'  # MP3 format
                 )
                 .overwrite_output()
                 .run(quiet=True, capture_stdout=True)
@@ -249,10 +271,11 @@ class AudioExtractionService:
                 .output(
                     output_path,
                     vn=None,  # No video
-                    acodec='pcm_s16le',  # 16-bit PCM
+                    acodec='mp3',  # MP3 codec
+                    audio_bitrate='192k',  # High quality bitrate
                     ar=44100,  # 44.1kHz sample rate
                     ac=2,  # Stereo for better quality
-                    f='wav'  # WAV format
+                    f='mp3'  # MP3 format
                 )
                 .overwrite_output()
                 .run(quiet=True, capture_stdout=True)
@@ -269,7 +292,7 @@ class AudioExtractionService:
             audio_storage_path: Storage path of audio file to delete
         """
         try:
-            response = self.supabase.storage.from_(settings.STORAGE_BUCKET).remove([audio_storage_path])
+            response = self.supabase.storage.from_(settings.PROCESSING_BUCKET).remove([audio_storage_path])
             
             if hasattr(response, 'error') and response.error:
                 logger.warning(f"Supabase delete error for {audio_storage_path}: {response.error}")
@@ -307,7 +330,7 @@ class AudioExtractionService:
         try:
             logger.info(f"🎬 Extracting audio from stored video: {video_storage_path}")
             
-            # Get signed URL to download the video
+            # Get signed URL to download the video (video files remain in main storage bucket)
             video_signed_url = self.supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(video_storage_path, 3600)
             if hasattr(video_signed_url, 'error') and video_signed_url.error:
                 raise AudioExtractionError(f"Failed to create video signed URL: {video_signed_url.error}")
@@ -315,9 +338,9 @@ class AudioExtractionService:
             video_url = video_signed_url.get('signedURL')
             
             # Create temporary files
-            audio_filename = f"audio_{media_id}_{uuid.uuid4().hex[:8]}.wav"
+            audio_filename = f"audio_{media_id}_{uuid.uuid4().hex[:8]}.mp3"
             temp_video_path = self.temp_dir / f"temp_video_{media_id}.tmp"
-            temp_audio_path = self.temp_dir / f"temp_audio_{media_id}.wav"
+            temp_audio_path = self.temp_dir / f"temp_audio_{media_id}.mp3"
             
             # Try streaming extraction first (faster, no temp video file)
             logger.info(f"🎵 Attempting streaming audio extraction...")
@@ -344,21 +367,41 @@ class AudioExtractionService:
             # Upload extracted audio back to storage
             audio_storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client_id}/audio/{audio_filename}"
             
-            logger.info(f"📤 Uploading extracted audio to storage...")
             with open(temp_audio_path, 'rb') as audio_file:
                 audio_data = audio_file.read()
             
-            upload_response = self.supabase.storage.from_(settings.STORAGE_BUCKET).upload(
+            # Enhanced logging with file size and time estimates
+            audio_size_mb = len(audio_data) / 1024 / 1024
+            estimated_upload_time = max(5, audio_size_mb / 2)  # Rough estimate: 2MB/s
+            
+            logger.info(f"📤 Starting audio upload to processing bucket:")
+            logger.info(f"   📁 File: {audio_filename}")
+            logger.info(f"   📊 Size: {audio_size_mb:.1f}MB")
+            logger.info(f"   ⏱️ Estimated upload time: ~{estimated_upload_time:.0f} seconds")
+            logger.info(f"   🎯 Destination: {audio_storage_path}")
+            
+            import time
+            upload_start_time = time.time()
+            
+            upload_response = self.supabase.storage.from_(settings.PROCESSING_BUCKET).upload(
                 audio_storage_path,
                 audio_data,
-                file_options={"content-type": "audio/wav"}
+                file_options={"content-type": "audio/mpeg"}
             )
             
+            upload_duration = time.time() - upload_start_time
+            upload_speed = audio_size_mb / upload_duration if upload_duration > 0 else 0
+            
             if hasattr(upload_response, 'error') and upload_response.error:
+                logger.error(f"❌ Upload failed after {upload_duration:.1f}s: {upload_response.error}")
                 raise AudioExtractionError(f"Failed to upload audio: {upload_response.error}")
             
+            logger.info(f"✅ Audio upload completed!")
+            logger.info(f"   ⏱️ Duration: {upload_duration:.1f}s")
+            logger.info(f"   🚀 Speed: {upload_speed:.1f}MB/s")
+            
             # Generate signed URL for Deepgram
-            audio_signed_response = self.supabase.storage.from_(settings.STORAGE_BUCKET).create_signed_url(audio_storage_path, 3600)
+            audio_signed_response = self.supabase.storage.from_(settings.PROCESSING_BUCKET).create_signed_url(audio_storage_path, 3600)
             if hasattr(audio_signed_response, 'error') and audio_signed_response.error:
                 raise AudioExtractionError(f"Failed to create audio signed URL: {audio_signed_response.error}")
             
