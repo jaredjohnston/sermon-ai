@@ -182,3 +182,10 @@ media & transcripts (isolated by client_id)
 - **Client Isolation**: All data scoped to client_id with RLS enforcement
 - **API Security**: All endpoints require Bearer token authentication
 - **Webhook Security**: Secret token validation for automated triggers
+
+### TLDR Advice:
+
+- **Webhook handlers**: Never do heavy work inside a webhook handler. Always:
+- Acknowledge immediately.
+- Queue for background processing.
+- Let a worker do the heavy lifting.

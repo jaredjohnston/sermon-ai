@@ -941,34 +941,35 @@ async def handle_upload_complete(request: Request):
             storage_path = object_name
         
         # Start background processing based on file type (SMART ROUTING)
-        transcript_id = None
+        # Use fire-and-forget pattern to avoid webhook timeout
         if file_category == "audio":
-            logger.info(f"🎵 Starting audio processing pipeline")
-            transcript_id = await start_audio_transcription_background(
+            logger.info(f"🎵 Starting audio processing pipeline (background)")
+            asyncio.create_task(background_audio_processing_wrapper(
                 media_id=media_id,
                 storage_path=storage_path,
                 client_id=client_id,
                 user_id=user_id
-            )
+            ))
         elif file_category == "video":
-            logger.info(f"🎬 Starting video processing pipeline (audio extraction)")
-            transcript_id = await start_video_processing_background(
+            logger.info(f"🎬 Starting video processing pipeline (background)")
+            asyncio.create_task(background_video_processing_wrapper(
                 media_id=media_id,
                 storage_path=storage_path,
                 client_id=client_id,
                 user_id=user_id
-            )
+            ))
         else:
             logger.warning(f"⚠️ Unknown file category: {file_category}")
             raise HTTPException(status_code=400, detail=f"Unsupported file category: {file_category}")
         
+        # Return immediately without waiting for processing to complete
         return {
-            "status": "success",
-            "message": "Upload processed and transcription started",
+            "status": "processing_started",
+            "message": "Upload processed, transcription started in background",
             "media_id": media_id,
-            "transcript_id": str(transcript_id) if transcript_id else None,
+            "file_category": file_category,
             "processing_type": processing_type,
-            "processed_at": datetime.now(UTC).isoformat()
+            "started_at": datetime.now(UTC).isoformat()
         }
         
     except HTTPException:
@@ -1101,6 +1102,56 @@ async def start_video_processing_background(media_id: str, storage_path: str, cl
                 user_id
             )
         raise
+
+async def background_audio_processing_wrapper(media_id: str, storage_path: str, client_id: str, user_id: str):
+    """
+    Wrapper for audio processing that handles errors in background tasks
+    This prevents unhandled exceptions in fire-and-forget tasks
+    """
+    try:
+        await start_audio_transcription_background(
+            media_id=media_id,
+            storage_path=storage_path,
+            client_id=client_id,
+            user_id=user_id
+        )
+        logger.info(f"✅ Background audio processing completed for media {media_id}")
+    except Exception as e:
+        logger.error(f"❌ Background audio processing failed for media {media_id}: {str(e)}", exc_info=True)
+        # Update media record to show processing failed
+        try:
+            await supabase_service.update_media(
+                media_id,
+                {"processing_status": "failed", "error_message": str(e)},
+                user_id
+            )
+        except Exception as update_error:
+            logger.error(f"❌ Failed to update media status: {update_error}")
+
+async def background_video_processing_wrapper(media_id: str, storage_path: str, client_id: str, user_id: str):
+    """
+    Wrapper for video processing that handles errors in background tasks
+    This prevents unhandled exceptions in fire-and-forget tasks
+    """
+    try:
+        await start_video_processing_background(
+            media_id=media_id,
+            storage_path=storage_path,
+            client_id=client_id,
+            user_id=user_id
+        )
+        logger.info(f"✅ Background video processing completed for media {media_id}")
+    except Exception as e:
+        logger.error(f"❌ Background video processing failed for media {media_id}: {str(e)}", exc_info=True)
+        # Update media record to show processing failed
+        try:
+            await supabase_service.update_media(
+                media_id,
+                {"processing_status": "failed", "error_message": str(e)},
+                user_id
+            )
+        except Exception as update_error:
+            logger.error(f"❌ Failed to update media status: {update_error}")
 
 @router.post("/callback")
 async def transcription_callback(request: Request):

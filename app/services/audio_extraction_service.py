@@ -210,6 +210,57 @@ class AudioExtractionService:
             error_message = e.stderr.decode() if e.stderr else str(e)
             raise AudioExtractionError(f"FFmpeg command failed: {error_message}")
     
+    async def _extract_audio_streaming(self, video_url: str, output_path: Path) -> None:
+        """
+        Extract audio directly from HTTP URL using FFmpeg streaming
+        This eliminates the need to download the video file first
+        
+        Args:
+            video_url: HTTP URL to video file (e.g., Supabase signed URL)
+            output_path: Path where audio file should be saved
+            
+        Raises:
+            AudioExtractionError: If streaming extraction fails
+        """
+        try:
+            # Run FFmpeg extraction in executor to avoid blocking
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                self._run_ffmpeg_streaming,
+                video_url,
+                str(output_path)
+            )
+        except Exception as e:
+            raise AudioExtractionError(f"FFmpeg streaming extraction failed: {str(e)}")
+    
+    def _run_ffmpeg_streaming(self, video_url: str, output_path: str) -> None:
+        """
+        Synchronous FFmpeg streaming extraction - runs in thread executor
+        Uses direct HTTP URL input to avoid downloading video file
+        
+        Args:
+            video_url: HTTP URL to video file
+            output_path: Path where audio file should be saved
+        """
+        try:
+            (
+                ffmpeg
+                .input(video_url)  # Direct HTTP URL input
+                .output(
+                    output_path,
+                    vn=None,  # No video
+                    acodec='pcm_s16le',  # 16-bit PCM
+                    ar=44100,  # 44.1kHz sample rate
+                    ac=2,  # Stereo for better quality
+                    f='wav'  # WAV format
+                )
+                .overwrite_output()
+                .run(quiet=True, capture_stdout=True)
+            )
+        except ffmpeg.Error as e:
+            error_message = e.stderr.decode() if e.stderr else str(e)
+            raise AudioExtractionError(f"FFmpeg streaming command failed: {error_message}")
+    
     async def cleanup_audio_file(self, audio_storage_path: str) -> None:
         """
         Clean up audio file from Supabase storage after successful transcription
@@ -268,21 +319,27 @@ class AudioExtractionService:
             temp_video_path = self.temp_dir / f"temp_video_{media_id}.tmp"
             temp_audio_path = self.temp_dir / f"temp_audio_{media_id}.wav"
             
-            # Download video file using centralized HTTP client with proper SSL
-            logger.info(f"📥 Downloading video from storage...")
+            # Try streaming extraction first (faster, no temp video file)
+            logger.info(f"🎵 Attempting streaming audio extraction...")
             
-            # Use the centralized HTTP client for reliable download
-            total_bytes = await http_client.download_file(
-                url=video_url,
-                file_path=str(temp_video_path),
-                chunk_size=8192
-            )
-            
-            logger.info(f"📥 Downloaded video ({total_bytes} bytes)")
-            
-            # Extract audio using existing FFmpeg logic
-            logger.info(f"🎵 Extracting audio...")
-            await self._extract_audio_ffmpeg(temp_video_path, temp_audio_path)
+            try:
+                await self._extract_audio_streaming(video_url, temp_audio_path)
+                logger.info(f"✅ Streaming extraction successful")
+            except Exception as streaming_error:
+                logger.warning(f"⚠️ Streaming extraction failed: {streaming_error}")
+                logger.info(f"📥 Falling back to download method...")
+                
+                # Fallback: Download video file then extract
+                total_bytes = await http_client.download_file(
+                    url=video_url,
+                    file_path=str(temp_video_path),
+                    chunk_size=8192
+                )
+                logger.info(f"📥 Downloaded video ({total_bytes} bytes)")
+                
+                # Extract audio using existing FFmpeg logic
+                logger.info(f"🎵 Extracting audio from downloaded file...")
+                await self._extract_audio_ffmpeg(temp_video_path, temp_audio_path)
             
             # Upload extracted audio back to storage
             audio_storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client_id}/audio/{audio_filename}"
