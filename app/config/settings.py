@@ -50,25 +50,6 @@ class Settings(BaseSettings):
     MAX_RETRIES: int = 3
     RETRY_DELAY: int = 1  # seconds
     
-    # Prompts
-    SEGMENT_CLASSIFIER_PROMPT: str = """
-    Analyze this segment of a church service transcript and classify it into one of these categories:
-    - sermon: The main message/teaching
-    - prayer: Prayer segments
-    - worship: Music and worship
-    - admin: Announcements, logistics
-    - other: Anything else
-
-    Text to classify:
-    {text}
-
-    Respond in JSON format with:
-    {
-        "type": "category_name",
-        "confidence": 0.0-1.0 score
-    }
-    """
-
     # API Settings
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_NAME: str = "Sermon AI"
