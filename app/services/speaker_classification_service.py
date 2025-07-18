@@ -157,12 +157,17 @@ Example response format:
                 
                 if speaker_id in speaker_samples:
                     sample_data = speaker_samples[speaker_id]
+                    # Truncate sample text to 150 characters to meet schema validation
+                    sample_text = sample_data["sample_text"]
+                    if len(sample_text) > 150:
+                        sample_text = sample_text[:147] + "..."
+                    
                     speakers.append(SpeakerClassification(
                         speaker_id=speaker_id,
                         category=category,
                         confidence=confidence,
                         word_count=sample_data["word_count"],
-                        sample_text=sample_data["sample_text"]  # Store full 150-word sample
+                        sample_text=sample_text
                     ))
             
             processing_time = int((time.time() - start_time) * 1000)
