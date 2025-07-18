@@ -34,15 +34,15 @@ import type { SermonData, ContentResponse } from "@/types/api"
 
 interface TranscriptEditorProps {
   sermon: SermonData
-  onTranscriptUpdate: (sermonId: string, newTranscript: string) => void
-  onContentGenerated: (sermonId: string, content: ContentResponse["content"]) => void
+  onContentGenerated: (sermonId: string, contentResponse: ContentResponse) => void
   onBack: () => void
 }
 
-export function TranscriptEditor({ sermon, onTranscriptUpdate, onContentGenerated, onBack }: TranscriptEditorProps) {
-  const [transcript, setTranscript] = useState(sermon.transcript || "")
-  const [originalTranscript] = useState(sermon.transcript || "")
-  const [isEditing, setIsEditing] = useState(true) // Default to editing mode
+export function TranscriptEditor({ sermon, onContentGenerated, onBack }: TranscriptEditorProps) {
+  const transcriptText = sermon.transcript?.content?.full_transcript || ""
+  const [transcript, setTranscript] = useState(transcriptText)
+  const [originalTranscript] = useState(transcriptText)
+  const [isEditing, setIsEditing] = useState(false) // Read-only mode since editing is no longer needed
   const [isGenerating, setIsGenerating] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,24 +82,14 @@ export function TranscriptEditor({ sermon, onTranscriptUpdate, onContentGenerate
     }
   }
 
-  const handleSave = () => {
-    if (editorRef.current) {
-      const content = editorRef.current.innerHTML
-      onTranscriptUpdate(sermon.id, content)
-      setTranscript(content)
-      setHasUnsavedChanges(false)
-      toast({
-        title: "Transcript Saved",
-        description: "Your changes have been saved successfully.",
-      })
-    }
-  }
+  // Transcript editing removed - transcripts are read-only
 
   const handleCancel = () => {
+    const originalText = sermon.transcript?.content?.full_transcript || ""
     if (editorRef.current) {
-      editorRef.current.innerHTML = sermon.transcript || ""
+      editorRef.current.innerHTML = originalText
     }
-    setTranscript(sermon.transcript || "")
+    setTranscript(originalText)
     setHasUnsavedChanges(false)
     setUndoStack([])
     setRedoStack([])
@@ -157,8 +147,11 @@ export function TranscriptEditor({ sermon, onTranscriptUpdate, onContentGenerate
     setError(null)
 
     try {
-      const response = await generateContent(transcript, contentTypesToGenerate)
-      onContentGenerated(sermon.id, response.content)
+      // TODO: Update to use template-based generation when templates are available
+      // For now, this will need to be updated to work with the new template system
+      throw new Error('Content generation needs to be updated for template system')
+      // const response = await generateContent(sermon.transcript?.transcript_id || '', templateId, customInstructions)
+      // onContentGenerated(sermon.id, response)
       toast({
         title: "Content Generated",
         description: "New content has been generated from your transcript!",
@@ -289,10 +282,7 @@ export function TranscriptEditor({ sermon, onTranscriptUpdate, onContentGenerate
                 <Button variant="outline" size="sm" onClick={handleCancel} disabled={!hasUnsavedChanges}>
                   <X className="h-4 w-4" />
                 </Button>
-                <Button className="zorp-button" size="sm" onClick={handleSave} disabled={!hasUnsavedChanges}>
-                  <Save className="h-4 w-4 mr-2" />
-                  SAVE
-                </Button>
+                {/* Save button removed - transcripts are read-only */}
               </div>
             </div>
           </div>
@@ -434,7 +424,6 @@ export function TranscriptEditor({ sermon, onTranscriptUpdate, onContentGenerate
                   className="text-white font-bold py-3 px-8 rounded-lg shadow-lg transform transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:transform-none"
                   style={{
                     background: `linear-gradient(to right, #0000ee, #4040ff)`,
-                    ":hover": { background: `linear-gradient(to right, #0000cc, #3030ff)` },
                   }}
                   onClick={handleGenerateContent}
                   disabled={isGenerating || !transcript.trim() || hasUnsavedChanges}

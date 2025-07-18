@@ -10,7 +10,7 @@ import { SermonLibrary } from "./sermon-library"
 import { AIAssistant } from "./ai-assistant"
 import { TranscriptEditor } from "./transcript-editor"
 import { VideoClips } from "./video-clips"
-import type { SermonData, ProcessingStage, TranscriptionResponse, ContentResponse } from "@/types/api"
+import type { SermonData, ProcessingStage, TranscriptionResponse, ContentResponse, GeneratedContentModel } from "@/types/api"
 import { useToast } from "@/hooks/use-toast"
 
 // Sample sermon data for testing
@@ -18,7 +18,18 @@ const SAMPLE_SERMONS: SermonData[] = [
   {
     id: "sample-1",
     filename: "The Good Shepherd - John 10.mp3",
-    transcript: `Welcome everyone to our service today. Let's turn to John chapter 10, where Jesus speaks about being the Good Shepherd.
+    transcript: {
+      transcript_id: "transcript-1",
+      video: {
+        id: "video-1",
+        filename: "The Good Shepherd - John 10.mp3",
+        duration_seconds: 1800,
+        size_bytes: 86000000,
+        content_type: "audio/mpeg",
+      },
+      status: "completed",
+      content: {
+        full_transcript: `Welcome everyone to our service today. Let's turn to John chapter 10, where Jesus speaks about being the Good Shepherd.
 
 "I am the good shepherd. The good shepherd lays down his life for the sheep. The hired hand is not the shepherd and does not own the sheep. So when he sees the wolf coming, he abandons the sheep and runs away. Then the wolf attacks the flock and scatters it."
 
@@ -31,64 +42,65 @@ The beautiful truth is that Jesus not only protects us, but He laid down His lif
 As we go through this week, remember that you are known, loved, and protected by the Good Shepherd. He will never leave you nor forsake you.
 
 Let us pray together...`,
+        utterances: [
+          {
+            speaker: 1,
+            text: "Welcome everyone to our service today. Let's turn to John chapter 10, where Jesus speaks about being the Good Shepherd.",
+            start: 0,
+            end: 5.2,
+            confidence: 0.95,
+          },
+          {
+            speaker: 1,
+            text: "I am the good shepherd. The good shepherd lays down his life for the sheep.",
+            start: 5.5,
+            end: 12.1,
+            confidence: 0.98,
+          },
+        ],
+        confidence: 0.96,
+      },
+      created_at: "2024-01-15T10:30:00Z",
+      updated_at: "2024-01-15T10:35:00Z",
+      completed_at: "2024-01-15T10:35:00Z",
+      request_id: "req-123",
+    },
     uploadedAt: "2024-01-15T10:30:00Z",
     status: "completed",
-    content: {
-      summary:
-        "This sermon explores Jesus as the Good Shepherd from John 10, emphasizing His sacrificial love, protection, and personal care for believers. Unlike hired hands who abandon sheep in danger, Jesus stands firm against threats and laid down His life for His flock.",
-      devotional:
-        "Take a moment today to reflect on Jesus as your Good Shepherd. In what areas of your life do you need His protection and guidance? Remember that He knows you by name and cares for you personally. When you face the 'wolves' of worry, fear, or uncertainty, trust that your Shepherd is watching over you with love.",
-      discussion_questions:
-        "1. What does it mean to you personally that Jesus knows you by name?\n2. How have you experienced Jesus' protection in difficult times?\n3. What are some 'wolves' in our modern world that threaten to scatter believers?\n4. How can we follow Jesus' example of sacrificial love in our relationships?\n5. In what ways can we trust the Good Shepherd's guidance this week?",
-    },
-  },
-  {
-    id: "sample-2",
-    filename: "Faith Over Fear - Matthew 14.mp4",
-    transcript: `Good morning, church family. Today we're looking at Matthew 14, the story of Peter walking on water.
-
-"Shortly before dawn Jesus went out to them, walking on the lake. When the disciples saw him walking on the lake, they were terrified. 'It's a ghost,' they said, and cried out in fear. But Jesus immediately said to them: 'Take courage! It is I. Don't be afraid.'"
-
-Picture this scene: the disciples are in a boat, fighting against strong winds and waves. They're exhausted, afraid, and feeling alone. Then they see Jesus walking toward them on the water.
-
-Peter's response is remarkable: "Lord, if it's you, tell me to come to you on the water." And Jesus simply says, "Come."
-
-Peter steps out of the boat. He actually walks on water! But then he sees the wind and becomes afraid, and he begins to sink.
-
-Here's what I want us to see: Peter's faith wasn't perfect, but it was real. He took the step. He got out of the boat when others stayed inside.
-
-Sometimes we focus on Peter sinking, but let's celebrate that he walked on water! Eleven disciples stayed in the boat, but Peter experienced a miracle.
-
-What boats is God calling you to step out of? What fears are keeping you from experiencing His power in your life?
-
-Faith doesn't mean the absence of fear - it means choosing to trust God despite our fears.`,
-    uploadedAt: "2024-01-08T09:15:00Z",
-    status: "completed",
-  },
-  {
-    id: "sample-3",
-    filename: "Love Your Neighbor - Luke 10.wav",
-    transcript: `Let's dive into one of Jesus' most powerful parables today - the Good Samaritan from Luke 10.
-
-A man asked Jesus, "Who is my neighbor?" Jesus responded with this story:
-
-"A man was going down from Jerusalem to Jericho, when he was attacked by robbers. They stripped him of his clothes, beat him and went away, leaving him half dead."
-
-Three people passed by this wounded man. A priest saw him and passed by on the other side. A Levite did the same. But then a Samaritan came along.
-
-Now, this is significant because Jews and Samaritans didn't get along. They had deep cultural and religious differences. Yet this Samaritan stopped, bandaged the man's wounds, took him to an inn, and paid for his care.
-
-Jesus asks, "Which of these three do you think was a neighbor to the man who fell into the hands of robbers?"
-
-The answer is obvious - the one who showed mercy.
-
-Our neighbor isn't just the person who lives next door or looks like us or shares our beliefs. Our neighbor is anyone in need that God places in our path.
-
-Sometimes we're so busy with religious activities that we miss opportunities to show love. The priest and Levite were probably on their way to important religious duties, but they missed the most important thing - loving their neighbor.
-
-How can we be Good Samaritans in our community this week?`,
-    uploadedAt: "2024-01-01T11:00:00Z",
-    status: "completed",
+    content: [
+      {
+        id: "content-1",
+        client_id: "client-1",
+        transcript_id: "transcript-1",
+        template_id: "template-summary",
+        content: "This sermon explores Jesus as the Good Shepherd from John 10, emphasizing His sacrificial love, protection, and personal care for believers. Unlike hired hands who abandon sheep in danger, Jesus stands firm against threats and laid down His life for His flock.",
+        content_metadata: { template_name: "Summary" },
+        generation_settings: { model: "gpt-4o", temperature: 0.7 },
+        generation_cost_cents: 45,
+        generation_duration_ms: 2300,
+        user_edits_count: 0,
+        created_at: "2024-01-15T10:35:00Z",
+        created_by: "user-1",
+        updated_at: "2024-01-15T10:35:00Z",
+        updated_by: "user-1",
+      },
+      {
+        id: "content-2",
+        client_id: "client-1",
+        transcript_id: "transcript-1",
+        template_id: "template-devotional",
+        content: "Take a moment today to reflect on Jesus as your Good Shepherd. In what areas of your life do you need His protection and guidance? Remember that He knows you by name and cares for you personally. When you face the 'wolves' of worry, fear, or uncertainty, trust that your Shepherd is watching over you with love.",
+        content_metadata: { template_name: "Devotional" },
+        generation_settings: { model: "gpt-4o", temperature: 0.7 },
+        generation_cost_cents: 38,
+        generation_duration_ms: 2100,
+        user_edits_count: 0,
+        created_at: "2024-01-15T10:36:00Z",
+        created_by: "user-1",
+        updated_at: "2024-01-15T10:36:00Z",
+        updated_by: "user-1",
+      },
+    ],
   },
 ]
 
@@ -127,8 +139,8 @@ export function Dashboard() {
     const newSermon: SermonData = {
       id: Date.now().toString(),
       filename: data.filename,
-      transcript: data.transcript,
-      uploadedAt: data.processed_at,
+      transcript: undefined, // Transcript will be populated when transcription completes
+      uploadedAt: data.created_at,
       status: "transcribing",
     }
 
@@ -199,21 +211,39 @@ export function Dashboard() {
     setCurrentView("content")
   }
 
-  const handleTranscriptUpdate = (sermonId: string, newTranscript: string) => {
-    setSermons((prev) =>
-      prev.map((sermon) => (sermon.id === sermonId ? { ...sermon, transcript: newTranscript } : sermon)),
-    )
-    if (currentSermon?.id === sermonId) {
-      setCurrentSermon({ ...currentSermon, transcript: newTranscript })
-    }
-  }
+  // Transcript editing removed - transcripts are 99% accurate from Deepgram
 
-  const handleContentGenerated = (sermonId: string, content: ContentResponse["content"]) => {
+  const handleContentGenerated = (sermonId: string, contentResponse: ContentResponse) => {
+    const generatedContent: GeneratedContentModel = {
+      id: contentResponse.id,
+      client_id: "client-1", // This would come from user context
+      transcript_id: sermonId,
+      template_id: contentResponse.metadata.template_id,
+      content: contentResponse.content,
+      content_metadata: { template_name: contentResponse.metadata.template_name },
+      generation_settings: { model: contentResponse.metadata.model_used },
+      generation_cost_cents: contentResponse.metadata.generation_cost_cents,
+      generation_duration_ms: contentResponse.metadata.generation_duration_ms,
+      user_edits_count: 0,
+      created_at: new Date().toISOString(),
+      created_by: "user-1", // This would come from user context
+      updated_at: new Date().toISOString(),
+      updated_by: "user-1", // This would come from user context
+    }
+    
     setSermons((prev) =>
-      prev.map((sermon) => (sermon.id === sermonId ? { ...sermon, content, status: "completed" } : sermon)),
+      prev.map((sermon) => 
+        sermon.id === sermonId 
+          ? { ...sermon, content: [...(sermon.content || []), generatedContent], status: "completed" }
+          : sermon
+      ),
     )
     if (currentSermon?.id === sermonId) {
-      setCurrentSermon({ ...currentSermon, content, status: "completed" })
+      setCurrentSermon({ 
+        ...currentSermon, 
+        content: [...(currentSermon.content || []), generatedContent], 
+        status: "completed" 
+      })
       setCurrentView("content")
       setCurrentStage("completed")
     }
@@ -223,7 +253,7 @@ export function Dashboard() {
     // Show processing status if currently processing
     if (["uploading", "transcribing", "generating", "error"].includes(currentStage)) {
       return (
-        <ProcessingStatus stage={currentStage} filename={currentSermon?.filename} error={error} onRetry={handleRetry} />
+        <ProcessingStatus stage={currentStage} filename={currentSermon?.filename} error={error || undefined} onRetry={handleRetry} />
       )
     }
 
@@ -262,7 +292,6 @@ export function Dashboard() {
           return (
             <TranscriptEditor
               sermon={currentSermon}
-              onTranscriptUpdate={handleTranscriptUpdate}
               onContentGenerated={handleContentGenerated}
               onBack={() => setCurrentView("library")}
             />

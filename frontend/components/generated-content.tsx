@@ -4,49 +4,60 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Copy, FileText, Heart, MessageCircle, CheckCircle2, ArrowLeft } from "lucide-react"
-import type { ContentResponse } from "@/types/api"
+import { Copy, FileText, Heart, MessageCircle, CheckCircle2, ArrowLeft, BookOpen, Users, Lightbulb } from "lucide-react"
+import type { GeneratedContentModel } from "@/types/api"
 import { useToast } from "@/hooks/use-toast"
 
 interface GeneratedContentProps {
-  content: ContentResponse["content"]
+  content: GeneratedContentModel[]
   generatedAt: string
   filename?: string
   onBack?: () => void
 }
 
-const CONTENT_TYPES = {
-  summary: {
-    label: "Summary",
-    icon: FileText,
-    description: "Key points and main themes",
-    color: "bg-blue-100 text-blue-800",
-  },
-  devotional: {
-    label: "Devotional",
-    icon: Heart,
-    description: "Personal reflection and application",
-    color: "bg-blue-100 text-blue-800",
-  },
-  discussion_questions: {
-    label: "Discussion",
-    icon: MessageCircle,
-    description: "Questions for group study",
-    color: "bg-blue-100 text-blue-800",
-  },
+// Dynamic icon mapping based on content type
+const getContentTypeIcon = (templateName: string) => {
+  const name = templateName.toLowerCase()
+  if (name.includes('summary')) return FileText
+  if (name.includes('devotional')) return Heart
+  if (name.includes('discussion') || name.includes('questions')) return MessageCircle
+  if (name.includes('small group') || name.includes('group')) return Users
+  if (name.includes('study') || name.includes('bible')) return BookOpen
+  return Lightbulb // Default icon
+}
+
+const getContentTypeColor = (templateName: string) => {
+  const name = templateName.toLowerCase()
+  if (name.includes('summary')) return 'bg-blue-100 text-blue-800'
+  if (name.includes('devotional')) return 'bg-purple-100 text-purple-800'
+  if (name.includes('discussion') || name.includes('questions')) return 'bg-green-100 text-green-800'
+  if (name.includes('small group') || name.includes('group')) return 'bg-orange-100 text-orange-800'
+  if (name.includes('study') || name.includes('bible')) return 'bg-indigo-100 text-indigo-800'
+  return 'bg-gray-100 text-gray-800' // Default color
 }
 
 export function GeneratedContent({ content, generatedAt, filename, onBack }: GeneratedContentProps) {
   const [copiedSection, setCopiedSection] = useState<string | null>(null)
   const { toast } = useToast()
 
-  const copyToClipboard = async (text: string, section: string) => {
+  // Create dynamic tabs from the content array
+  const contentTabs = content.map(item => ({
+    id: item.id,
+    key: item.template_id,
+    label: item.content_metadata?.template_name || 'Generated Content',
+    description: `AI-generated ${item.content_metadata?.template_name?.toLowerCase() || 'content'}`,
+    icon: getContentTypeIcon(item.content_metadata?.template_name || ''),
+    color: getContentTypeColor(item.content_metadata?.template_name || ''),
+    content: item.content
+  }))
+
+  const copyToClipboard = async (text: string, contentItem: typeof contentTabs[0]) => {
     try {
       await navigator.clipboard.writeText(text)
-      setCopiedSection(section)
+      setCopiedSection(contentItem.id)
       toast({
         title: "Copied to clipboard",
-        description: `${CONTENT_TYPES[section as keyof typeof CONTENT_TYPES]?.label} copied successfully`,
+        description: `${contentItem.label} copied successfully`,
       })
       setTimeout(() => setCopiedSection(null), 2000)
     } catch (error) {
@@ -94,61 +105,61 @@ export function GeneratedContent({ content, generatedAt, filename, onBack }: Gen
       </Card>
 
       {/* Content Tabs */}
+      {contentTabs.length > 0 ? (
       <div
         className="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-lg border-2"
         style={{ borderColor: "#0000ee" }}
       >
-        <Tabs defaultValue="summary" className="w-full">
+        <Tabs defaultValue={contentTabs[0]?.id} className="w-full">
           <TabsList
-            className="grid w-full grid-cols-3 bg-white/70 border max-w-2xl mx-auto"
+            className={`grid w-full bg-white/70 border max-w-4xl mx-auto ${
+              contentTabs.length <= 3 ? 'grid-cols-' + contentTabs.length : 'grid-cols-4'
+            }`}
             style={{ borderColor: "#0000ee" }}
           >
-            {Object.entries(CONTENT_TYPES).map(([key, config]) => {
-              const Icon = config.icon
+            {contentTabs.map((tab) => {
+              const Icon = tab.icon
               return (
                 <TabsTrigger
-                  key={key}
-                  value={key}
-                  className="flex items-center space-x-2 data-[state=active]:bg-blue-100"
+                  key={tab.id}
+                  value={tab.id}
+                  className="flex items-center space-x-2 data-[state=active]:bg-blue-100 text-xs sm:text-sm"
                   style={{
                     color: "#0000ee",
                   }}
                 >
                   <Icon className="h-4 w-4" />
-                  <span>{config.label}</span>
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
                 </TabsTrigger>
               )
             })}
           </TabsList>
 
-          {Object.entries(CONTENT_TYPES).map(([key, config]) => {
-            const Icon = config.icon
-            const contentText = content[key as keyof typeof content]
-            const isCopied = copiedSection === key
+          {contentTabs.map((tab) => {
+            const Icon = tab.icon
+            const isCopied = copiedSection === tab.id
+            const isQuestionType = tab.label.toLowerCase().includes('question') || tab.label.toLowerCase().includes('discussion')
 
             return (
-              <TabsContent key={key} value={key} className="mt-8">
+              <TabsContent key={tab.id} value={tab.id} className="mt-8">
                 <Card className="bg-white/80 border shadow-sm max-w-5xl mx-auto" style={{ borderColor: "#0000ee" }}>
                   <CardHeader className="border-b bg-white/50" style={{ borderColor: "#0000ee" }}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <div
-                          className={`p-2 rounded-full ${
-                            key === "summary" ? "bg-blue-100" : key === "devotional" ? "bg-blue-100" : "bg-green-100"
-                          }`}
-                        >
-                          <Icon className={`h-4 w-4 text-blue-600`} style={{ color: "#0000ee" }} />
+                        <div className={`p-2 rounded-full ${tab.color.split(' ')[0]}`}>
+                          <Icon className="h-4 w-4" style={{ color: "#0000ee" }} />
                         </div>
                         <div>
-                          <CardTitle className="text-gray-900">{config.label}</CardTitle>
-                          <p className="text-sm text-gray-600 font-medium">{config.description}</p>
+                          <CardTitle className="text-gray-900">{tab.label}</CardTitle>
+                          <p className="text-sm text-gray-600 font-medium">{tab.description}</p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => copyToClipboard(contentText, key)}
+                          onClick={() => copyToClipboard(tab.content, tab)}
                           disabled={isCopied}
                           className="text-white hover:bg-blue-50"
                           style={{ borderColor: "#0000ee", color: "#0000ee" }}
@@ -165,9 +176,9 @@ export function GeneratedContent({ content, generatedAt, filename, onBack }: Gen
                   </CardHeader>
                   <CardContent className="p-8">
                     <div className="prose prose-lg max-w-none">
-                      {key === "discussion_questions" ? (
+                      {isQuestionType ? (
                         <ol className="space-y-4">
-                          {contentText
+                          {tab.content
                             .split("\n")
                             .filter((q) => q.trim())
                             .map((question, index) => (
@@ -177,7 +188,7 @@ export function GeneratedContent({ content, generatedAt, filename, onBack }: Gen
                             ))}
                         </ol>
                       ) : (
-                        <div className="whitespace-pre-wrap text-base leading-relaxed text-gray-700">{contentText}</div>
+                        <div className="whitespace-pre-wrap text-base leading-relaxed text-gray-700">{tab.content}</div>
                       )}
                     </div>
                   </CardContent>
@@ -187,6 +198,15 @@ export function GeneratedContent({ content, generatedAt, filename, onBack }: Gen
           })}
         </Tabs>
       </div>
+      ) : (
+        <Card className="bg-gray-50 border-2 border-gray-200">
+          <CardContent className="p-12 text-center">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Content Generated</h3>
+            <p className="text-gray-500">Generate content from your transcript to see it here.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
