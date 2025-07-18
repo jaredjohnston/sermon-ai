@@ -141,6 +141,8 @@ class DeepgramService:
                 smart_format=True,
                 punctuate=True,
                 diarize=True,
+                utterances=True,
+                paragraphs=True,
                 callback=settings.CALLBACK_URL
             )
 

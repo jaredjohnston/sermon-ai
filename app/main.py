@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import router as api_router
 from app.config.settings import settings
+from app.services.startup_service import startup_service
 
 # Configure logging
 logging.basicConfig(
@@ -32,6 +33,17 @@ def create_application() -> FastAPI:
     
     # Include API routes
     app.include_router(api_router, prefix="/api/v1")
+    
+    # Add startup and shutdown event handlers
+    @app.on_event("startup")
+    async def startup_event():
+        """Initialize application services on startup"""
+        await startup_service.initialize_application()
+    
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        """Shutdown application services gracefully"""
+        await startup_service.shutdown_application()
     
     return app
 

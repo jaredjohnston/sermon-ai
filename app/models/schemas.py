@@ -19,6 +19,17 @@ class SegmentType(str, Enum):
     admin = "admin"
     other = "other"
 
+class SpeakerCategory(str, Enum):
+    """Categories for speaker roles in church services"""
+    opening_words = "opening_words"
+    worship = "worship"
+    sermon = "sermon"
+    automated_announcements = "automated_announcements"
+    announcements = "announcements"
+    giving_offering = "giving_offering"
+    closing_words = "closing_words"
+    other = "other"
+
 class ContentType(str, Enum):
     """Types of content that can be generated"""
     devotional = "devotional"
@@ -193,17 +204,25 @@ class SubscriptionStatus(str, Enum):
     trial = "trial"
 
 class TranscriptStatus(str, Enum):
-    """Status of a transcript"""
+    """Status of Deepgram transcription"""
     processing = "processing"
     completed = "completed"
     failed = "failed"
     pending = "pending"
+
+class ProcessingStatus(str, Enum):
+    """Status of AI speaker classification processing"""
+    pending = "pending"
+    processing = "processing" 
+    completed = "completed"
+    failed = "failed"
 
 class TranscriptBase(BaseModel):
     """Base transcript model"""
     video_id: UUID
     client_id: UUID
     status: TranscriptStatus = Field(default=TranscriptStatus.processing)
+    processing_status: ProcessingStatus = Field(default=ProcessingStatus.pending)
     raw_transcript: Optional[Dict[str, Any]] = None
     processed_transcript: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
@@ -446,4 +465,20 @@ class UploadStatusResponse(BaseModel):
     file_category: str  # audio, video
     transcript_id: Optional[str] = None
     transcript_status: Optional[str] = None
-    error_message: Optional[str] = None 
+    error_message: Optional[str] = None
+
+# Speaker Classification Models
+class SpeakerClassification(BaseModel):
+    """Classification result for a single speaker"""
+    speaker_id: int
+    category: SpeakerCategory
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    word_count: int
+    sample_text: str = Field(..., max_length=150)
+    
+class SpeakerClassificationResult(BaseModel):
+    """Complete speaker classification results"""
+    speakers: List[SpeakerClassification]
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    processing_time_ms: Optional[int] = None
+    api_cost_cents: Optional[int] = None 

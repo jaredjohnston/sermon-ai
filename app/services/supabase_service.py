@@ -512,6 +512,20 @@ class SupabaseService:
             return Transcript(**response.data) if response.data else None
         except Exception as e:
             raise DatabaseError(f"Failed to get transcript by request_id: {str(e)}") from e
+    
+    async def get_transcript_by_id(self, transcript_id: str) -> Optional[Transcript]:
+        """Get a transcript by its ID using service role (for system operations)"""
+        try:
+            client = await self._get_client()
+            response = await client.table('transcripts')\
+                .select("*")\
+                .eq("id", transcript_id)\
+                .is_("deleted_at", "null")\
+                .maybe_single()\
+                .execute()
+            return Transcript(**response.data) if response and response.data else None
+        except Exception as e:
+            raise DatabaseError(f"Failed to get transcript by id: {str(e)}") from e
 
     async def get_client_transcripts(self, client_id: UUID, access_token: str, refresh_token: str = None) -> List[Transcript]:
         """Get all transcripts for a client using user-authenticated client"""

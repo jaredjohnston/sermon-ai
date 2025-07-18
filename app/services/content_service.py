@@ -157,5 +157,80 @@ class ContentService:
         except Exception as e:
             self.logger.error(f"Error extracting transcript from Deepgram response: {str(e)}")
             raise ValueError(f"Failed to extract transcript: {str(e)}") from e
+    
+    def extract_pastor_content_from_transcript(self, transcript_data: Dict[str, Any]) -> str:
+        """
+        Extract pastor content from transcript with new status-aware processing
+        
+        Args:
+            transcript_data: Full transcript data including status fields
+            
+        Returns:
+            Pastor content as a single string
+            
+        Raises:
+            ValueError: If no pastor content is found or transcript processing incomplete/failed
+        """
+        try:
+            # Check transcription status first
+            transcription_status = transcript_data.get("status")
+            if transcription_status != "completed":
+                raise ValueError(f"Transcription not completed. Status: {transcription_status}")
+            
+            # Check AI processing status
+            processing_status = transcript_data.get("processing_status")
+            if processing_status == "pending":
+                raise ValueError("AI processing not started yet - content not ready")
+            elif processing_status == "processing":
+                raise ValueError("AI processing in progress - content not ready")
+            elif processing_status == "failed":
+                raise ValueError("AI processing failed - no content available")
+            elif processing_status != "completed":
+                raise ValueError(f"Unknown processing status: {processing_status}")
+            
+            # Extract processed transcript
+            processed_transcript = transcript_data.get("processed_transcript")
+            if not processed_transcript:
+                raise ValueError("No processed transcript data available")
+            
+            # Check if this is the new AI-powered format
+            if processed_transcript.get("classification_method") != "ai_powered":
+                method = processed_transcript.get("classification_method", "unknown")
+                raise ValueError(f"Unsupported classification method: {method}. Expected 'ai_powered'.")
+            
+            # Extract filtered content from AI classification
+            filtered_content = processed_transcript.get('filtered_content', {})
+            if not filtered_content:
+                raise ValueError("No filtered content found in AI-classified transcript")
+            
+            pastor_text = filtered_content.get('full_text', '')
+            if not pastor_text.strip():
+                raise ValueError("Filtered content is empty - speaker classification may have failed")
+                
+            self.logger.info(f"Using AI-filtered content from transcript: {len(pastor_text)} characters")
+            self.logger.info(f"Content includes {filtered_content.get('word_count', 0)} words from {filtered_content.get('utterance_count', 0)} utterances")
+            
+            return pastor_text.strip()
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting pastor content from transcript: {str(e)}")
+            raise ValueError(f"Failed to extract pastor content: {str(e)}") from e
+            
+    def extract_pastor_content_from_processed_transcript(self, processed_transcript: Dict[str, Any]) -> str:
+        """
+        DEPRECATED: Use extract_pastor_content_from_transcript instead
+        
+        Legacy method for backward compatibility during transition period
+        """
+        self.logger.warning("Using deprecated method extract_pastor_content_from_processed_transcript. Use extract_pastor_content_from_transcript instead.")
+        
+        # Create a mock transcript_data structure for the new method
+        mock_transcript_data = {
+            "status": "completed",
+            "processing_status": "completed",
+            "processed_transcript": processed_transcript
+        }
+        
+        return self.extract_pastor_content_from_transcript(mock_transcript_data)
 
 content_service = ContentService() 

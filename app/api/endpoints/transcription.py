@@ -10,13 +10,62 @@ from app.services.audio_extraction_service import audio_extraction_service, Audi
 from app.services.audio_cleanup_service import audio_cleanup_service
 from app.services.file_type_service import file_type_service, FileCategory
 from app.services.audio_service import audio_service, AudioProcessingError
+from app.services.speaker_classification_service import speaker_classification_service
+from app.services.background_job_service import background_job_service
 from app.middleware.auth import get_current_user, get_auth_context, AuthContext
-from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate, PrepareUploadRequest, PrepareUploadResponse, TUSConfig
+from app.models.schemas import User, MediaCreate, VideoCreate, TranscriptCreate, PrepareUploadRequest, PrepareUploadResponse, TUSConfig, SpeakerCategory
 from datetime import datetime, UTC, timedelta
 import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+async def _schedule_post_webhook_cleanup(transcript, transcription_status: str):
+    """
+    Background task to handle post-webhook cleanup operations
+    This runs after the webhook has returned 200 OK to Deepgram
+    """
+    try:
+        logger.info(f"📅 Starting post-webhook cleanup for transcript {transcript.id}")
+        
+        # Schedule audio file cleanup after retention period
+        if transcription_status == "completed":
+            try:
+                # Get audio storage path from transcript metadata
+                metadata = transcript.metadata or {}
+                audio_storage_path = metadata.get("audio_storage_path")
+                
+                if audio_storage_path:
+                    if settings.AUDIO_RETENTION_DAYS > 0:
+                        # Schedule cleanup after retention period
+                        logger.info(f"📅 Audio file scheduled for cleanup after {settings.AUDIO_RETENTION_DAYS} days: {audio_storage_path}")
+                        
+                        # Update transcript metadata with cleanup schedule
+                        cleanup_date = datetime.now(UTC) + timedelta(days=settings.AUDIO_RETENTION_DAYS)
+                        updated_metadata = metadata.copy()
+                        updated_metadata["audio_cleanup_scheduled"] = cleanup_date.isoformat()
+                        
+                        await supabase_service.update_transcript_system(
+                            transcript.id, 
+                            {"metadata": updated_metadata}, 
+                            transcript.created_by
+                        )
+                    else:
+                        # Immediate cleanup (legacy behavior)
+                        await audio_extraction_service.cleanup_audio_file(audio_storage_path)
+                        logger.info(f"🧹 Immediate cleanup: {audio_storage_path}")
+                else:
+                    logger.info(f"ℹ️ No audio storage path found in transcript metadata")
+                    
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ Failed to schedule audio cleanup in background: {str(cleanup_error)}")
+                # Don't raise exception - this is background cleanup
+        
+        logger.info(f"✅ Post-webhook cleanup completed for transcript {transcript.id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Background cleanup failed for transcript {transcript.id}: {str(e)}", exc_info=True)
+        # Don't raise exception - this is background cleanup
 
 async def start_transcription_when_ready(transcript_id: str, audio_signed_url: str, user_id: str, access_token: str):
     """
@@ -1219,14 +1268,38 @@ async def transcription_callback(request: Request):
                         
                         # Log individual utterances if available
                         if 'utterances' in alt:
-                            logger.info("\nUtterances:")
-                            for k, utterance in enumerate(alt['utterances']):
+                            utterances = alt['utterances']
+                            logger.info(f"\n🗣️ Utterances: {len(utterances)} found")
+                            for k, utterance in enumerate(utterances):
                                 logger.info(f"\nUtterance {k + 1}:")
                                 logger.info(f"Speaker: {utterance.get('speaker', 'Unknown')}")
                                 logger.info(f"Start: {utterance.get('start', 'N/A')}s")
                                 logger.info(f"End: {utterance.get('end', 'N/A')}s")
                                 logger.info(f"Text: {utterance.get('transcript', 'No text')}")
                                 logger.info(f"Confidence: {utterance.get('confidence', 'No confidence')}")
+                        else:
+                            logger.warning("⚠️ No utterances found in response")
+                        
+                        # Log paragraphs if available
+                        if 'paragraphs' in alt:
+                            paragraphs = alt['paragraphs']
+                            logger.info(f"\n📄 Paragraphs: {len(paragraphs)} found")
+                            for k, paragraph in enumerate(paragraphs):
+                                logger.info(f"\nParagraph {k + 1}:")
+                                if isinstance(paragraph, dict):
+                                    # Paragraph is an object with metadata
+                                    logger.info(f"Start: {paragraph.get('start', 'N/A')}s")
+                                    logger.info(f"End: {paragraph.get('end', 'N/A')}s")
+                                    logger.info(f"Text: {paragraph.get('transcript', 'No text')[:100]}...")
+                                    if 'sentences' in paragraph:
+                                        logger.info(f"Sentences: {len(paragraph['sentences'])} found")
+                                elif isinstance(paragraph, str):
+                                    # Paragraph is just a string
+                                    logger.info(f"Text: {paragraph[:100]}...")
+                                else:
+                                    logger.warning(f"Unexpected paragraph type: {type(paragraph)}")
+                        else:
+                            logger.warning("⚠️ No paragraphs found in response")
         else:
             logger.warning("⚠️ No transcript data found in callback payload")
             
@@ -1273,11 +1346,25 @@ async def transcription_callback(request: Request):
                         new_status = "failed"
                         error_message = "Invalid Deepgram response structure"
                     
+                    # 🚀 FAST ACKNOWLEDGE PATTERN: Store raw transcript and queue background processing
+                    # This ensures webhook responds quickly (<100ms) instead of waiting for AI processing
+                    
+                    # Set processed_transcript_data to None - will be handled by background job
+                    processed_transcript_data = None
+                    
+                    # Set processing status to failed if transcription failed
+                    if new_status != "completed":
+                        await supabase_service.update_transcript_system(
+                            transcript.id,
+                            {"processing_status": "failed"},
+                            transcript.created_by
+                        )
+                    
                     # Update transcript with results
                     update_data = {
                         "status": new_status,
                         "raw_transcript": data,
-                        "processed_transcript": {"processed_at": datetime.now(UTC).isoformat()},
+                        "processed_transcript": processed_transcript_data,
                         "error_message": error_message
                     }
                     
@@ -1285,6 +1372,60 @@ async def transcription_callback(request: Request):
                     if updated_transcript:
                         logger.info(f"✅ Transcript updated successfully - Status: {new_status}")
                         
+                        # 🚀 QUEUE BACKGROUND JOB AFTER DATABASE UPDATE (fixes race condition)
+                        if new_status == "completed":
+                            try:
+                                # Extract utterances to check if AI processing is possible
+                                results = data.get('results', {})
+                                utterances = results.get('utterances', [])
+                                
+                                if utterances and len(utterances) > 0:
+                                    logger.info(f"🎯 Queuing AI speaker classification for {len(utterances)} utterances")
+                                    
+                                    # Queue background job for AI processing (after database is updated)
+                                    job_id = await background_job_service.queue_job(
+                                        job_type="ai_classification",
+                                        payload={"transcript_id": str(transcript.id)}
+                                    )
+                                    
+                                    logger.info(f"✅ AI classification job queued: {job_id}")
+                                    
+                                    # 🎯 WEBHOOK TIMING OPTIMIZATION: Return 200 OK immediately after queuing
+                                    # This ensures Deepgram gets acknowledgment in <100ms
+                                    response_data = {
+                                        "status": "success",
+                                        "message": "Callback received and processed",
+                                        "processed_at": datetime.now(UTC).isoformat(),
+                                        "request_id": request_id
+                                    }
+                                    
+                                    # Schedule cleanup and other non-critical operations in background
+                                    asyncio.create_task(
+                                        _schedule_post_webhook_cleanup(transcript, new_status),
+                                        name=f"post_webhook_cleanup_{transcript.id}"
+                                    )
+                                    
+                                    return response_data
+                                    
+                                else:
+                                    logger.warning("⚠️ No utterances found for speaker classification")
+                                    # Set processing status to failed immediately
+                                    await supabase_service.update_transcript_system(
+                                        transcript.id,
+                                        {"processing_status": "failed"},
+                                        transcript.created_by
+                                    )
+                                    
+                            except Exception as queue_error:
+                                logger.error(f"❌ Failed to queue AI classification job: {str(queue_error)}", exc_info=True)
+                                # Set processing status to failed
+                                await supabase_service.update_transcript_system(
+                                    transcript.id,
+                                    {"processing_status": "failed"},
+                                    transcript.created_by
+                                )
+                        
+                        # For non-completed status or failed classification, do cleanup synchronously
                         # Schedule audio file cleanup after retention period
                         if new_status == "completed":
                             try:
@@ -1345,6 +1486,116 @@ async def transcription_callback(request: Request):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process callback: {str(e)}"
+        )
+
+@router.get("/pastor-content/{transcript_id}")
+async def get_pastor_content(
+    transcript_id: str,
+    auth: AuthContext = Depends(get_auth_context)
+):
+    """Get pastor content from a processed transcript"""
+    try:
+        from uuid import UUID
+        transcript_uuid = UUID(transcript_id)
+        
+        # Get user's client for authorization
+        client = await supabase_service.get_user_client(auth.user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to access transcripts"
+            )
+        
+        # Get transcript
+        transcript = await supabase_service.get_transcript(transcript_uuid, auth.access_token)
+        if not transcript:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transcript not found"
+            )
+        
+        # Check authorization
+        if transcript.client_id != client.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this transcript"
+            )
+        
+        # Check transcription status
+        if transcript.status != "completed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Transcription not completed. Status: {transcript.status}"
+            )
+        
+        # Check AI processing status with detailed error messages
+        if transcript.processing_status == "pending":
+            raise HTTPException(
+                status_code=status.HTTP_202_ACCEPTED,
+                detail="AI processing not started yet - content not ready. Please try again later."
+            )
+        elif transcript.processing_status == "processing":
+            raise HTTPException(
+                status_code=status.HTTP_202_ACCEPTED,
+                detail="AI processing in progress - content not ready. Please try again later."
+            )
+        elif transcript.processing_status == "failed":
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="AI processing failed - no content available"
+            )
+        elif transcript.processing_status != "completed":
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Unknown processing status: {transcript.processing_status}"
+            )
+        
+        # Extract processed transcript data
+        if not transcript.processed_transcript:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No processed content found despite completed processing status"
+            )
+        
+        processed_data = transcript.processed_transcript
+        
+        # Ensure this is the new AI-powered format
+        if processed_data.get("classification_method") != "ai_powered":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Transcript uses unsupported classification method: {processed_data.get('classification_method', 'unknown')}. Expected 'ai_powered'."
+            )
+        
+        # Extract AI classification results
+        filtered_content = processed_data.get("filtered_content", {})
+        speaker_classifications = processed_data.get("speaker_classifications", [])
+        classification_metadata = processed_data.get("classification_metadata", {})
+        
+        if not filtered_content or not speaker_classifications:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No AI classification results found in this transcript"
+            )
+        
+        return {
+            "transcript_id": str(transcript.id),
+            "classification_method": "ai_powered",
+            "filtered_content": filtered_content,
+            "speaker_classifications": speaker_classifications,
+            "classification_metadata": classification_metadata,
+            "retrieved_at": datetime.now(UTC).isoformat()
+        }
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid transcript ID format"
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving pastor content: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve pastor content: {str(e)}"
         )
 
 @router.post("/admin/cleanup-audio")

@@ -140,23 +140,12 @@ curl -X POST "http://localhost:8000/api/v1/transcription/webhooks/upload-complet
 - **Simplicity** → Prioritize simplicity and readability over clever solutions
 - **Early Returns** → Use to avoid nested conditions
 
-## 📚 Additional Documentation
-- **TUS Upload System**: See `TUS_UPLOAD_ARCHITECTURE.md` for complete upload and transcription flow documentation
-
 ## 🏗️ High Level Architecture
 
 ### System Flow Overview
 ```
 Frontend UI → FastAPI Backend → Supabase Storage → AI Processing → Database
-     ↓              ↓                ↓                    ↓            ↓
-Upload File    Validate Auth    TUS/HTTP Upload     Deepgram API   Content Gen
-Progress UI    Client Setup     File Storage        Transcription   OpenAI API
-Drag/Drop      Media Records    Resumable Chunks    Audio Analysis  Summaries
-                                                    
-                    ↓                              ↓
-            Background Processing            Webhook Triggers
-            Smart File Routing              Automatic Pipeline
-            Audio/Video Handling           Transcript Creation
+
 ```
 
 ### **🔄 Data Flow (Upload → Transcription)**
@@ -185,7 +174,17 @@ media & transcripts (isolated by client_id)
 
 ### TLDR Advice:
 
-- **Webhook handlers**: Never do heavy work inside a webhook handler. Always:
-- Acknowledge immediately.
-- Queue for background processing.
-- Let a worker do the heavy lifting.
+- **🚫 WEBHOOK ANTI-PATTERN RULE:**
+
+  ### ❌ DON'T DO: Heavy Processing in Webhook Handlers
+  - Never perform expensive operations (API calls, complex computations, large database updates) inside webhook endpoints
+  - Webhook handlers should complete in <100ms to avoid timeouts and retries
+  - Don't mix external service concerns (e.g., Deepgram success + OpenAI success = single status)
+
+  ### ✅ DO: Acknowledge Fast, Process in Background
+  - Webhook pattern: Validate → Store minimal data → Queue background job → Return 200 OK immediately
+  - Use separate status fields for different concerns (transcription_status vs processing_status)
+  - Move heavy operations to background jobs with independent retry logic
+  - Keep webhook responses lightweight and fast
+
+  **Remember**: Webhook failures cause retries and cascade issues. Always acknowledge fast and process async. The core principle: Webhooks should acknowledge receipt quickly, not do the work.
