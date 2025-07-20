@@ -70,20 +70,20 @@ cp .env.example .env
 # Edit .env with your API keys and settings
 
 # 3. Start server
-python run.py  # Runs on http://localhost:8000
+cd backend && python run.py  # Runs on http://localhost:8000
 ```
 
 ### 💡 Essential Development Commands
 ```bash
 # Generate fresh test token
-python tests/manual/generate_fresh_token.py
+cd backend && cd backend && python tests/manual/generate_fresh_token.py
 
 # Run test suite
-python -m pytest tests/unit/ -v
-python tests/integration/test_tus_upload_integration.py
+cd backend && python -m pytest tests/unit/ -v
+cd backend && python tests/integration/test_tus_upload_integration.py
 
 # Frontend testing
-open tests/manual/test_frontend_tus.html
+open backend/tests/manual/test_frontend_tus.html
 ```
 
 ## 🚨 Common Issues & Quick Fixes
@@ -109,7 +109,7 @@ open tests/manual/test_frontend_tus.html
 curl http://localhost:8000/api/v1/health
 
 # Verify token
-python tests/manual/generate_fresh_token.py
+cd backend && python tests/manual/generate_fresh_token.py
 
 # Test webhook manually
 curl -X POST "http://localhost:8000/api/v1/transcription/webhooks/upload-complete" \

@@ -32,7 +32,7 @@ python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ### 2. Environment Configuration
@@ -72,10 +72,10 @@ Ensure your Supabase database has the required tables:
 
 ```bash
 # Using the provided run script
-python run.py
+cd backend && python run.py
 
 # Or directly with uvicorn
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### For Development with Webhooks
@@ -117,31 +117,39 @@ CALLBACK_URL=https://your-unique-url.ngrok-free.app/api/v1/transcription/callbac
 
 ```
 sermon_ai/
-├── app/
-│   ├── api/
-│   │   └── endpoints/
-│   │       ├── auth.py
-│   │       ├── transcription.py
-│   │       ├── content.py
-│   │       └── health.py
-│   ├── config/
-│   │   └── settings.py
-│   ├── models/
-│   │   └── schemas.py
-│   ├── services/
-│   │   ├── supabase_service.py
-│   │   ├── deepgram_service.py
-│   │   ├── audio_extraction_service.py
-│   │   ├── audio_service.py
-│   │   ├── validation_service.py
-│   │   └── file_type_service.py
-│   ├── utils/
-│   │   └── http_client.py          # Centralized HTTP client with SSL
-│   ├── middleware/
-│   │   └── auth.py
-│   └── main.py
-├── requirements.txt
-├── run.py
+├── backend/                        # Python FastAPI backend
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── endpoints/
+│   │   │       ├── auth.py
+│   │   │       ├── transcription.py
+│   │   │       ├── content.py
+│   │   │       └── health.py
+│   │   ├── config/
+│   │   │   └── settings.py
+│   │   ├── models/
+│   │   │   └── schemas.py
+│   │   ├── services/
+│   │   │   ├── supabase_service.py
+│   │   │   ├── deepgram_service.py
+│   │   │   ├── audio_extraction_service.py
+│   │   │   ├── audio_service.py
+│   │   │   ├── validation_service.py
+│   │   │   └── file_type_service.py
+│   │   ├── utils/
+│   │   │   └── http_client.py      # Centralized HTTP client with SSL
+│   │   ├── middleware/
+│   │   │   └── auth.py
+│   │   └── main.py
+│   ├── tests/                      # Backend tests
+│   ├── migrations/                 # Database migrations
+│   ├── requirements.txt
+│   ├── run.py
+│   └── venv/                       # Virtual environment
+├── frontend/                       # Next.js frontend
+├── shared/                         # Shared resources
+├── supabase/                       # Supabase functions
+├── docs/                           # Documentation
 └── README.md
 ```
 
@@ -151,10 +159,10 @@ sermon_ai/
 
 ```bash
 # Full transcription pipeline test
-python test_transcription_pipeline.py
+cd backend && python tests/unit/test_transcription_pipeline.py
 
 # Generate fresh authentication token
-python generate_fresh_token.py
+cd backend && python tests/manual/generate_fresh_token.py
 ```
 
 ### Test Requirements
