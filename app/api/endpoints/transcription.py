@@ -222,7 +222,11 @@ async def prepare_upload(
                 client_id=client.id,
                 metadata={
                     "file_category": file_category.value,
-                    "processing_requirements": processing_requirements,
+                    "processing_type": processing_requirements["processing_type"],
+                    "needs_audio_extraction": processing_requirements.get("needs_audio_extraction", False),
+                    "audio_extraction_needed": processing_requirements.get("audio_extraction_needed", False),
+                    "video_upload_needed": processing_requirements.get("video_upload_needed", False),
+                    "processing_requirements": processing_requirements,  # Keep full object for reference
                     "upload_status": "preparing",
                     "upload_method": "direct_to_supabase"
                 }
@@ -362,6 +366,16 @@ async def transcribe_upload(
             storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/uploads/{file.filename}"
             
             # Create media record first
+            # Combine validation results with processing information
+            media_metadata = {
+                **validation_result.file_info,  # Include file validation results
+                "file_category": file_category.value,  # Store detected file category
+                "processing_type": processing_requirements["processing_type"],  # Store processing type
+                "needs_audio_extraction": processing_requirements.get("needs_audio_extraction", False),
+                "audio_extraction_needed": processing_requirements.get("audio_extraction_needed", False),
+                "video_upload_needed": processing_requirements.get("video_upload_needed", False)
+            }
+            
             video = await supabase_service.create_media(
                 MediaCreate(
                     filename=file.filename,
@@ -369,7 +383,7 @@ async def transcribe_upload(
                     size_bytes=file_size,
                     storage_path=storage_path,
                     client_id=client.id,
-                    metadata=validation_result.file_info  # Store validation results
+                    metadata=media_metadata  # Store validation results + processing info
                 ),
                 auth.user.id
             )
@@ -927,6 +941,9 @@ async def handle_upload_complete(request: Request):
             path_parts = object_name.split("/")
             if len(path_parts) < 3:
                 logger.error(f"❌ Invalid storage path format: {object_name}")
+                logger.error(f"🔍 Expected format: clients/{{client_id}}/uploads/filename.mp3")
+                logger.error(f"🔍 Received format: {object_name}")
+                logger.error(f"🔍 This suggests the Edge Function is not sending the full object path")
                 raise HTTPException(status_code=400, detail="Invalid storage path format")
             
             client_id = path_parts[1]  # Extract client_id from path

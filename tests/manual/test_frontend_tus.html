@@ -110,7 +110,7 @@
             <input type="text" id="apiUrl" value="http://localhost:8000/api/v1" style="width: 300px; margin-left: 10px;">
             <br><br>
             <label for="authToken">Auth Token:</label>
-            <input type="text" id="authToken" value="eyJhbGciOiJIUzI1NiIsImtpZCI6IlNOWnZSYitpeFp5dXZ6WW4iLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2ZhcGp4ZWt1eWNrdXJhaGJ0dnJ0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIxYWQ3OTdiMS05MTFhLTQ3NDctOGIxYS1kM2U2M2Q3YjQ4OTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUyODUxOTk5LCJpYXQiOjE3NTI4NDgzOTksImVtYWlsIjoiamFyZWRqb2huc3RvbjAwMCt0b2tlbnRlc3RfMjAyNTA3MThfMTUxOTU4QGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJqYXJlZGpvaG5zdG9uMDAwK3Rva2VudGVzdF8yMDI1MDcxOF8xNTE5NThAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiMWFkNzk3YjEtOTExYS00NzQ3LThiMWEtZDNlNjNkN2I0ODk4In0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTI4NDgzOTl9XSwic2Vzc2lvbl9pZCI6IjU3MWViNDYzLWFjMTktNDNhOC04OTI4LTQ5MmE5NWQ2MzM2YiIsImlzX2Fub255bW91cyI6ZmFsc2V9.frHsj10PyoGaClMF6-SIHU3nvqHUinEhQ8RaIh6qmBI" style="width: 500px; margin-left: 10px;">
+            <input type="text" id="authToken" value="eyJhbGciOiJIUzI1NiIsImtpZCI6IlNOWnZSYitpeFp5dXZ6WW4iLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2ZhcGp4ZWt1eWNrdXJhaGJ0dnJ0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1OTY4MzQ5NS1iNTVmLTQ2NTktYmE4NS01ZTEzYWUzMTI3ODYiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUzMDI2NDYwLCJpYXQiOjE3NTMwMjI4NjAsImVtYWlsIjoiamFyZWRqb2huc3RvbjAwMCt0b2tlbnRlc3RfMjAyNTA3MjBfMTU0NzM5QGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJqYXJlZGpvaG5zdG9uMDAwK3Rva2VudGVzdF8yMDI1MDcyMF8xNTQ3MzlAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiNTk2ODM0OTUtYjU1Zi00NjU5LWJhODUtNWUxM2FlMzEyNzg2In0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTMwMjI4NjB9XSwic2Vzc2lvbl9pZCI6ImQwNjk3ZWJlLTliNTYtNGY2Ni1iNTE0LTcxYzcxYzA4M2YyYSIsImlzX2Fub255bW91cyI6ZmFsc2V9.EqxAxe57vuGjHpw5q6GnTBgiSr1mbdEWbn783Upsslg" style="width: 500px; margin-left: 10px;">
             <br><br>
             <button class="btn" onclick="testConnection()">🔍 Test API Connection</button>
         </div>
@@ -412,6 +412,7 @@
 
         function resumeUpload() {
             if (upload) {
+                uploadStartTime = Date.now(); // Reset timer on resume for accurate speed calculation
                 upload.start();
                 log('▶️ Upload resumed', 'info');
                 document.getElementById('pauseBtn').disabled = false;
