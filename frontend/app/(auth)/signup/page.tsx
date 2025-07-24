@@ -100,10 +100,7 @@ export default function SignupPage() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Create your account</CardTitle>
-        <CardDescription>
-          Sign up to start transforming your sermons with AI
-        </CardDescription>
+        <CardTitle>Create your free account</CardTitle>
       </CardHeader>
       
       <form onSubmit={handleSubmit}>
@@ -154,13 +151,12 @@ export default function SignupPage() {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="organizationName">Organization Name</Label>
+            <Label htmlFor="organizationName">Church Name</Label>
             <Input
               id="organizationName"
               name="organizationName"
               value={formData.organizationName}
               onChange={handleChange}
-              placeholder="Your church or ministry name"
               required
               disabled={isLoading}
             />
@@ -173,7 +169,6 @@ export default function SignupPage() {
               name="country"
               value={formData.country}
               onChange={handleChange}
-              placeholder="United States"
               required
               disabled={isLoading}
             />
@@ -209,7 +204,7 @@ export default function SignupPage() {
         <CardFooter className="flex flex-col space-y-4">
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Account
+            Create Free Account
           </Button>
           
           <p className="text-sm text-center text-warm-gray-600">

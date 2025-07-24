@@ -35,9 +35,6 @@ export default function LoginPage() {
     <Card className="w-full">
       <CardHeader>
         <CardTitle>Sign in to your account</CardTitle>
-        <CardDescription>
-          Enter your email and password to access your dashboard
-        </CardDescription>
       </CardHeader>
       
       <form onSubmit={handleSubmit}>
