@@ -347,7 +347,7 @@ export function Dashboard() {
         return (
           <div className="space-y-6">
             <h1 className="text-3xl font-black text-warm-gray-900">HELP & SUPPORT</h1>
-            <p className="text-warm-gray-600 font-medium">Get help with using Sermon AI</p>
+            <p className="text-warm-gray-600 font-medium">Get help with using Churchable</p>
             <div className="text-center py-12">
               <p className="text-warm-gray-600">Help documentation coming soon...</p>
             </div>
@@ -390,11 +390,11 @@ export function Dashboard() {
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-warm-gray-200 bg-card">
           <SidebarTrigger className="-ml-1" />
-          <div className="ml-auto flex items-center space-x-4">
+          <div className="ml-auto flex items-center space-x-4 pr-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Avatar className="h-10 w-10">
                     <AvatarFallback>
                       {user?.email?.substring(0, 2).toUpperCase() || 'U'}
                     </AvatarFallback>

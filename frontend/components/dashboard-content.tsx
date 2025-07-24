@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Upload, Sparkles, BookOpen, Zap, Video, Edit3 } from "lucide-react"
 import { UploadZone } from "./upload-zone"
+import Image from "next/image"
 import type { SermonData, TranscriptionResponse } from "@/types/api"
 
 interface DashboardContentProps {
@@ -16,28 +17,6 @@ interface DashboardContentProps {
   onContentEdit: (sermon: SermonData) => void
 }
 
-// Modern Church Logo - Simple Cross with Rays
-function ModernChurchLogo() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
-      {/* Central Cross */}
-      <rect x="11" y="6" width="2" height="12" rx="1" />
-      <rect x="7" y="10" width="10" height="2" rx="1" />
-
-      {/* Radiating Light Rays */}
-      <rect x="11.5" y="2" width="1" height="2" rx="0.5" opacity="0.7" />
-      <rect x="11.5" y="20" width="1" height="2" rx="0.5" opacity="0.7" />
-      <rect x="2" y="11.5" width="2" height="1" rx="0.5" opacity="0.7" />
-      <rect x="20" y="11.5" width="2" height="1" rx="0.5" opacity="0.7" />
-
-      {/* Diagonal rays */}
-      <rect x="5.5" y="5.5" width="1.4" height="1.4" rx="0.7" opacity="0.5" transform="rotate(45 6.2 6.2)" />
-      <rect x="17.1" y="5.5" width="1.4" height="1.4" rx="0.7" opacity="0.5" transform="rotate(45 17.8 6.2)" />
-      <rect x="5.5" y="17.1" width="1.4" height="1.4" rx="0.7" opacity="0.5" transform="rotate(45 6.2 17.8)" />
-      <rect x="17.1" y="17.1" width="1.4" height="1.4" rx="0.7" opacity="0.5" transform="rotate(45 17.8 17.8)" />
-    </svg>
-  )
-}
 
 export function DashboardContent({
   sermons,
@@ -53,13 +32,16 @@ export function DashboardContent({
       {/* Header */}
       <div className="text-center space-y-4">
         <div className="flex justify-center items-center gap-3">
-          <div
-            className="flex h-12 w-12 items-center justify-center text-white zorp-border"
-            style={{ backgroundColor: "#0000ee" }}
-          >
-            <ModernChurchLogo />
+          <div className="flex h-16 w-16 items-center justify-center border border-warm-gray-100 overflow-hidden bg-white">
+            <Image 
+              src="/churchable-logo-v1 .png" 
+              alt="Churchable Logo" 
+              width={64} 
+              height={64}
+              className="object-cover w-full h-full"
+            />
           </div>
-          <h1 className="text-5xl font-black zorp-text-blue">SERMON AI</h1>
+          <h1 className="text-5xl font-black zorp-text-blue">CHURCHABLE</h1>
         </div>
         <p className="text-lg text-warm-gray-600 max-w-2xl mx-auto font-medium">
           Create engaging content from your sermons that inspires and connects with your church throughout the week

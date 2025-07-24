@@ -8,7 +8,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Sermon AI - Transform Your Sermons",
+  title: "Churchable - Turn sermons into content for your church",
   description: "Upload your sermon audio/video and generate summaries, devotionals, and discussion questions using AI",
     generator: 'v0.dev'
 }
