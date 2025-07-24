@@ -19,33 +19,21 @@ class SignInResponse(BaseModel):
 
 @router.post("/signup", response_model=SignUpResponse)
 async def sign_up(user_data: UserCreate):
-    """Standard Supabase registration: signup → signin → profile → organization"""
+    """
+    Simplified Supabase signup - user provisioning now handled automatically 
+    by database trigger when email is confirmed.
+    """
     try:
-        # 1. Create auth user (standard Supabase)
+        # Create auth user with metadata (trigger handles the rest)
         user = await supabase_service.sign_up(user_data)
         
-        # 2. Sign in to get session
-        signin_result = await supabase_service.sign_in(user_data.email, user_data.password)
-        session = signin_result["session"]
-        
-        # 3. Complete profile using session
-        from app.models.schemas import UserProfileCreate
-        profile_data = UserProfileCreate(
-            first_name=user_data.first_name,
-            last_name=user_data.last_name,
-            country=user_data.country
-        )
-        profile = await supabase_service.complete_profile(profile_data, session)
-        
-        # 4. Create organization using session
-        client = await supabase_service.create_organization(user_data.organization_name, session)
-        
+        # Return simplified response - no profile/client data since user must confirm email first
         return SignUpResponse(
             user=user,
-            profile=profile,
-            client=client,
-            role="owner",
-            access_token=session.access_token
+            profile=None,  # Will be created by trigger after email confirmation
+            client=None,   # Will be created by trigger after email confirmation
+            role=None,     # Will be set by trigger after email confirmation
+            access_token=None  # User gets token after email confirmation
         )
     except Exception as e:
         logger.error(f"Error in signup: {str(e)}")

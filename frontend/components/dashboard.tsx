@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { useAuth } from "@/components/providers/AuthProvider"
+import { Button } from "@/components/ui/button"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { LogOut, User } from "lucide-react"
 import { AppSidebar } from "./app-sidebar"
 import { ProcessingStatus } from "./processing-status"
 import { GeneratedContent } from "./generated-content"
@@ -111,6 +121,23 @@ export function Dashboard() {
   const [currentView, setCurrentView] = useState("dashboard")
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
+  const { user, signOut } = useAuth()
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      toast({
+        title: "Signed out",
+        description: "You have been successfully signed out.",
+      })
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+      })
+    }
+  }
 
   // Load sermons from localStorage on mount
   useEffect(() => {
@@ -363,7 +390,34 @@ export function Dashboard() {
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-warm-gray-200 bg-card">
           <SidebarTrigger className="-ml-1" />
-          <div className="ml-auto flex items-center space-x-4">{/* Add any header actions here */}</div>
+          <div className="ml-auto flex items-center space-x-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>
+                      {user?.email?.substring(0, 2).toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuItem className="flex-col items-start">
+                  <div className="flex items-center">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Account</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {user?.email}
+                  </p>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
         <div className="flex flex-1 flex-col bg-warm-white">
           <div className="min-h-[100vh] flex-1 p-4 md:p-8">{renderContent()}</div>

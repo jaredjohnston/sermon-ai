@@ -13,37 +13,20 @@ import {
   User,
   ApiError
 } from '@/types/api';
+import { createClient } from '@/lib/supabase/client';
 
 class ApiClient {
   private baseURL: string;
-  private token: string | null = null;
+  private supabase = createClient();
 
   constructor() {
     this.baseURL = API_BASE_URL;
-    
-    // Load token from localStorage on initialization
-    if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('sermon_ai_token');
-    }
   }
 
-  // Auth management
-  setToken(token: string) {
-    this.token = token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sermon_ai_token', token);
-    }
-  }
-
-  clearToken() {
-    this.token = null;
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('sermon_ai_token');
-    }
-  }
-
-  getToken(): string | null {
-    return this.token;
+  // Get fresh token from Supabase session
+  private async getToken(): Promise<string | null> {
+    const { data: { session } } = await this.supabase.auth.getSession();
+    return session?.access_token || null;
   }
 
   // HTTP client with automatic auth headers
@@ -58,9 +41,10 @@ class ApiClient {
       ...options.headers,
     } as Record<string, string>;
 
-    // Add auth header if token exists
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    // Add auth header with fresh token from Supabase
+    const token = await this.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const config: RequestInit = {
