@@ -58,11 +58,12 @@
 
 @layer components {
   .zorp-card {
-    @apply bg-card border-2 border-warm-gray-800 rounded-none shadow-sm;
+    @apply bg-card shadow-xl border border-warm-gray-200 rounded-2xl;
   }
 
   .zorp-button {
-    @apply bg-primary hover:bg-primary/90 text-primary-foreground border-2 border-warm-gray-800 rounded-none font-semibold transition-colors duration-200;
+    @apply bg-primary text-primary-foreground font-semibold hover:brightness-110 transition-all duration-200;
+    border-radius: 9999px !important;
   }
 
   .zorp-button-orange {

@@ -96,18 +96,26 @@ const bottomNavigation = [
 
 export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect }: AppSidebarProps) {
   return (
-    <Sidebar collapsible="icon" className="border-r-2 border-warm-gray-800 bg-warm-gray-50">
-      <SidebarHeader className="border-b-2 border-warm-gray-800 bg-card">
-        <div className="flex items-center px-4 py-4">
-          <span className="font-black text-lg zorp-text-blue">CHURCHABLE</span>
+    <Sidebar collapsible="icon" className="border-r border-warm-gray-200 bg-warm-gray-50">
+      <SidebarHeader className="border-b border-warm-gray-200 bg-white">
+        <div className="flex items-center px-6 py-6">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <span className="text-white font-black text-sm">C</span>
+            </div>
+            <span className="font-black text-2xl text-warm-gray-900">CHURCHABLE</span>
+          </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="bg-warm-gray-50">
+      <SidebarContent className="p-4">
         {/* Main Content Creation Section */}
         <SidebarGroup>
+          <div className="px-2 py-2 mb-2">
+            <h4 className="text-xs font-black text-warm-gray-600 uppercase tracking-wider">CONTENT</h4>
+          </div>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-1">
               {mainNavigation.map((item) => {
                 const Icon = item.icon
                 const isActive = currentView === item.id
@@ -118,13 +126,9 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
                       isActive={isActive}
                       onClick={() => onViewChange(item.id)}
                       tooltip={item.description}
-                      className={`
-                        font-bold transition-colors hover:bg-card
-                        ${isActive ? "bg-card border-l-4 text-white" : "text-warm-gray-700"}
-                      `}
-                      style={isActive ? { borderLeftColor: "#0000ee", color: "#0000ee" } : {}}
+                      className="font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm"
                     >
-                      <Icon className="h-4 w-4" style={{ color: "#0000ee" }} />
+                      <Icon className="h-4 w-4" />
                       <span>{item.title.toUpperCase()}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -135,12 +139,15 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
         </SidebarGroup>
 
         {/* Visual Divider */}
-        <SidebarSeparator className="my-2" />
+        <SidebarSeparator className="my-6 bg-warm-gray-200" />
 
         {/* User Preferences Section */}
         <SidebarGroup>
+          <div className="px-2 py-2 mb-2">
+            <h4 className="text-xs font-black text-warm-gray-600 uppercase tracking-wider">PREFERENCES</h4>
+          </div>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-1">
               {userNavigation.map((item) => {
                 const Icon = item.icon
                 const isActive = currentView === item.id
@@ -149,13 +156,9 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => onViewChange(item.id)}
-                      className={`
-                        font-bold transition-colors hover:bg-card
-                        ${isActive ? "bg-card border-l-4 text-white" : "text-warm-gray-700"}
-                      `}
-                      style={isActive ? { borderLeftColor: "#0000ee", color: "#0000ee" } : {}}
+                      className="font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm"
                     >
-                      <Icon className="h-4 w-4" style={{ color: "#0000ee" }} />
+                      <Icon className="h-4 w-4" />
                       <span>{item.title.toUpperCase()}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -167,8 +170,8 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
 
       </SidebarContent>
 
-      <SidebarFooter className="border-t-2 border-warm-gray-800 bg-card">
-        <SidebarMenu>
+      <SidebarFooter className="border-t border-warm-gray-200 bg-white p-4">
+        <SidebarMenu className="space-y-1">
           {bottomNavigation.map((item) => {
             const Icon = item.icon
             const isActive = currentView === item.id
@@ -177,13 +180,9 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
                 <SidebarMenuButton
                   isActive={isActive}
                   onClick={() => onViewChange(item.id)}
-                  className={`
-                    font-bold transition-colors hover:bg-warm-gray-100
-                    ${isActive ? "bg-warm-gray-100 border-l-4" : "text-warm-gray-700"}
-                  `}
-                  style={isActive ? { borderLeftColor: "#0000ee", color: "#0000ee" } : {}}
+                  className="font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-warm-gray-50"
                 >
-                  <Icon className="h-4 w-4 text-warm-gray-700" />
+                  <Icon className="h-4 w-4" />
                   <span>{item.title.toUpperCase()}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

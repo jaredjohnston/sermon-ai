@@ -29,16 +29,6 @@ export function DashboardContent({
 }: DashboardContentProps) {
   return (
     <div className="space-y-12">
-      {/* Header */}
-      <div className="text-center space-y-4">
-        <div className="flex justify-center items-center">
-          <h1 className="text-5xl font-black zorp-text-blue">CHURCHABLE</h1>
-        </div>
-        <p className="text-lg text-warm-gray-600 max-w-2xl mx-auto font-medium">
-          Create engaging content from your sermons that inspires and connects with your church throughout the week
-        </p>
-      </div>
-
       {/* Upload Section */}
       <div className="space-y-6">
         <h2 className="text-3xl font-black text-warm-gray-900">UPLOAD NEW SERMON</h2>
@@ -46,34 +36,44 @@ export function DashboardContent({
       </div>
 
       {/* How It Works */}
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div className="flex items-center">
           <h2 className="text-3xl font-black text-warm-gray-900">HOW IT WORKS</h2>
           <div className="ml-4 h-1 flex-1 bg-warm-gray-200"></div>
         </div>
+        
         <div className="grid gap-8 md:grid-cols-3">
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-warm-gray-800 text-white zorp-border flex items-center justify-center mx-auto">
-              <Upload className="h-8 w-8" />
+          {/* Step 1 */}
+          <div className="flex flex-col items-start space-y-4">
+            <div className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center font-black text-xl">
+              1
             </div>
-            <h3 className="font-black text-xl text-warm-gray-900">1. UPLOAD</h3>
-            <p className="text-warm-gray-600 font-medium">Upload your sermon audio or video file</p>
+            <div>
+              <h3 className="font-black text-xl text-warm-gray-900 mb-3">UPLOAD</h3>
+              <p className="text-warm-gray-600 font-medium">Upload your sermon audio or video file securely. We support all major formats and files up to 100MB.</p>
+            </div>
           </div>
 
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-warm-gray-800 text-white zorp-border flex items-center justify-center mx-auto">
-              <Edit3 className="h-8 w-8" />
+          {/* Step 2 */}
+          <div className="flex flex-col items-start space-y-4">
+            <div className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center font-black text-xl">
+              2
             </div>
-            <h3 className="font-black text-xl text-warm-gray-900">2. EDIT TRANSCRIPT</h3>
-            <p className="text-warm-gray-600 font-medium">Review and edit the transcript before generating content</p>
+            <div>
+              <h3 className="font-black text-xl text-warm-gray-900 mb-3">REVIEW</h3>
+              <p className="text-warm-gray-600 font-medium">Review and edit the AI-generated transcript to ensure accuracy before generating content.</p>
+            </div>
           </div>
 
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-warm-gray-800 text-white zorp-border flex items-center justify-center mx-auto">
-              <Sparkles className="h-8 w-8" />
+          {/* Step 3 */}
+          <div className="flex flex-col items-start space-y-4">
+            <div className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center font-black text-xl">
+              3
             </div>
-            <h3 className="font-black text-xl text-warm-gray-900">3. GENERATE & SHARE</h3>
-            <p className="text-warm-gray-600 font-medium">Generate AI content and share with your church</p>
+            <div>
+              <h3 className="font-black text-xl text-warm-gray-900 mb-3">GENERATE</h3>
+              <p className="text-warm-gray-600 font-medium">Create summaries, key points, and social media content to share with your congregation.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -84,13 +84,13 @@ export function DashboardContent({
           <div className="flex items-center">
             <h2 className="text-3xl font-black text-warm-gray-900">RECENTLY CREATED</h2>
             <div className="ml-4 h-1 flex-1 bg-warm-gray-200"></div>
-            <Button className="zorp-button ml-4" onClick={() => onViewChange("library")}>
+            <Button className="ml-4 px-4 rounded-full" onClick={() => onViewChange("library")}>
               VIEW ALL
             </Button>
           </div>
           <div className="space-y-4">
             {sermons.slice(0, 3).map((sermon) => (
-              <Card key={sermon.id} className="zorp-card zorp-hover">
+              <Card key={sermon.id} className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center">
@@ -108,7 +108,7 @@ export function DashboardContent({
                       </Button>
 
                       {sermon.content ? (
-                        <Button className="zorp-button" size="sm" onClick={() => onContentEdit(sermon)}>
+                        <Button className="px-4 rounded-full" size="sm" onClick={() => onContentEdit(sermon)}>
                           <Sparkles className="h-4 w-4 mr-2" />
                           Review Content
                         </Button>
@@ -137,22 +137,17 @@ export function DashboardContent({
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {/* Recently Created Card */}
           <Card
-            className="zorp-card zorp-hover cursor-pointer overflow-hidden transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+            className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
             onClick={() => onViewChange("library")}
           >
-            <div className="h-2" style={{ backgroundColor: "#0000ee" }}></div>
             <CardContent className="p-0">
               <div className="flex flex-col h-full">
-                <div className="bg-warm-gray-50 p-6 flex items-center justify-center">
-                  <div className="p-4 text-white zorp-border rounded-full" style={{ backgroundColor: "#0000ee" }}>
-                    <BookOpen className="h-10 w-10" />
-                  </div>
-                </div>
-                <div className="p-6 text-center">
+                <div className="p-6 pb-8">
+                  <BookOpen className="h-10 w-10 text-primary mb-4" />
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">RECENTLY CREATED</h3>
-                  <p className="text-warm-gray-600 font-medium">Browse and manage your recently created content</p>
+                  <p className="text-warm-gray-600 font-medium mb-6">Browse and manage your recently created content</p>
                   <Button
-                    className="zorp-button mt-4 w-full"
+                    className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {
                       e.stopPropagation()
                       onViewChange("library")
@@ -167,22 +162,17 @@ export function DashboardContent({
 
           {/* AI Assistant Card */}
           <Card
-            className="zorp-card zorp-hover cursor-pointer overflow-hidden transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+            className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
             onClick={() => onViewChange("assistant")}
           >
-            <div className="h-2" style={{ backgroundColor: "#0000ee" }}></div>
             <CardContent className="p-0">
               <div className="flex flex-col h-full">
-                <div className="bg-warm-gray-50 p-6 flex items-center justify-center">
-                  <div className="p-4 text-white zorp-border rounded-full" style={{ backgroundColor: "#0000ee" }}>
-                    <Zap className="h-10 w-10" />
-                  </div>
-                </div>
-                <div className="p-6 text-center">
+                <div className="p-6 pb-8">
+                  <Zap className="h-10 w-10 text-primary mb-4" />
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">AI ASSISTANT</h3>
-                  <p className="text-warm-gray-600 font-medium">Get intelligent help with sermon content preparation</p>
+                  <p className="text-warm-gray-600 font-medium mb-6">Get intelligent help with sermon content preparation</p>
                   <Button
-                    className="zorp-button mt-4 w-full"
+                    className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {
                       e.stopPropagation()
                       onViewChange("assistant")
@@ -197,22 +187,17 @@ export function DashboardContent({
 
           {/* Create Social Clips Card */}
           <Card
-            className="zorp-card zorp-hover cursor-pointer overflow-hidden transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 sm:col-span-2 lg:col-span-1"
+            className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 sm:col-span-2 lg:col-span-1 overflow-hidden"
             onClick={() => onViewChange("video-clips")}
           >
-            <div className="h-2" style={{ backgroundColor: "#0000ee" }}></div>
             <CardContent className="p-0">
               <div className="flex flex-col h-full">
-                <div className="bg-warm-gray-50 p-6 flex items-center justify-center">
-                  <div className="p-4 text-white zorp-border rounded-full" style={{ backgroundColor: "#0000ee" }}>
-                    <Video className="h-10 w-10" />
-                  </div>
-                </div>
-                <div className="p-6 text-center">
+                <div className="p-6 pb-8">
+                  <Video className="h-10 w-10 text-primary mb-4" />
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">CREATE SOCIAL CLIPS</h3>
-                  <p className="text-warm-gray-600 font-medium">Create engaging social media clips from your sermons</p>
+                  <p className="text-warm-gray-600 font-medium mb-6">Create engaging social media clips from your sermons</p>
                   <Button
-                    className="zorp-button mt-4 w-full"
+                    className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {
                       e.stopPropagation()
                       onViewChange("video-clips")

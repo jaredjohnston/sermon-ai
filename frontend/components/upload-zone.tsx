@@ -106,7 +106,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
-      <Card className="zorp-card">
+      <Card className="border border-gray-200 rounded-2xl shadow-lg">
         <CardContent className="p-8">
           <div
             {...getRootProps()}
@@ -144,7 +144,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
               </div>
 
               {!uploading && !success && (
-                <div className="text-center p-4 bg-gray-50 zorp-border">
+                <div className="text-center p-4 bg-gray-50 border-2 border-gray-300">
                   <p className="font-bold mb-2">SUPPORTED FORMATS:</p>
                   <p className="font-medium mb-2">{SUPPORTED_EXTENSIONS.join(", ").toUpperCase()}</p>
                   <p className="text-sm font-medium text-gray-600">Maximum file size: 100MB</p>
@@ -159,7 +159,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
               )}
 
               {!uploading && !success && (
-                <Button className="zorp-button text-lg px-8 py-3">
+                <Button className="text-lg px-8 py-3 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200">
                   <Upload className="h-5 w-5 mr-2" />
                   CHOOSE FILE
                 </Button>
@@ -170,12 +170,12 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
       </Card>
 
       {error && (
-        <Alert variant="destructive" className="zorp-border bg-red-50">
+        <Alert variant="destructive" className="border-2 border-gray-300 bg-red-50">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between font-medium">
             <span>{error}</span>
             <Button
-              className="zorp-button-orange ml-4"
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full font-semibold transition-colors ml-4"
               size="sm"
               onClick={() => {
                 setError(null)

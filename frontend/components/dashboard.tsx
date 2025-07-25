@@ -388,9 +388,9 @@ export function Dashboard() {
         onSermonSelect={handleSermonSelect}
       />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-warm-gray-200 bg-card">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-warm-gray-200 bg-white px-4">
           <SidebarTrigger className="-ml-1" />
-          <div className="ml-auto flex items-center space-x-4 pr-4">
+          <div className="ml-auto flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
