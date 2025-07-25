@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -32,9 +33,21 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Sign in to your account</CardTitle>
+    <Card className="w-full bg-white/20 backdrop-blur-md shadow-2xl border-white/30 rounded-2xl">
+      <CardHeader className="text-center space-y-4 pb-8">
+        <div className="flex justify-center">
+          <Image 
+            src="/churchable.png" 
+            alt="Churchable Logo" 
+            width={120} 
+            height={120}
+            className="object-contain"
+          />
+        </div>
+        <div className="space-y-1">
+          <h1 className="text-4xl font-bold text-white">Churchable</h1>
+          <p className="text-white/90">Welcome, please sign in below.</p>
+        </div>
       </CardHeader>
       
       <form onSubmit={handleSubmit}>
@@ -46,7 +59,7 @@ export default function LoginPage() {
           )}
           
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-white">Email</Label>
             <Input
               id="email"
               type="email"
@@ -58,7 +71,7 @@ export default function LoginPage() {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-white">Password</Label>
             <Input
               id="password"
               type="password"
@@ -70,15 +83,17 @@ export default function LoginPage() {
           </div>
         </CardContent>
         
-        <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full" disabled={isLoading}>
+        <CardFooter className="flex flex-col">
+          <Button type="submit" className="mx-auto px-8 rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign In
           </Button>
           
-          <p className="text-sm text-center text-warm-gray-600">
+          <div className="w-full border-t border-white/20 mt-8 mb-4"></div>
+          
+          <p className="text-sm text-center text-white/80">
             Don't have an account?{' '}
-            <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/signup" className="font-medium text-white underline hover:text-white/90">
               Sign up
             </Link>
           </p>

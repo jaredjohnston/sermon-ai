@@ -71,10 +71,10 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>
+      <Card className="w-full bg-white/20 backdrop-blur-md shadow-2xl border-white/30 rounded-2xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-white">Check your email</CardTitle>
+          <CardDescription className="text-white/80">
             We've sent you a confirmation link at {formData.email}
           </CardDescription>
         </CardHeader>
@@ -85,10 +85,11 @@ export default function SignupPage() {
             </AlertDescription>
           </Alert>
         </CardContent>
-        <CardFooter>
-          <p className="text-sm text-center text-warm-gray-600 w-full">
+        <CardFooter className="flex flex-col space-y-4">
+          <div className="w-full border-t border-white/20"></div>
+          <p className="text-sm text-center text-white/80 w-full">
             Already have an account?{' '}
-            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/login" className="font-medium text-white underline hover:text-white/90">
               Sign in
             </Link>
           </p>
@@ -98,9 +99,10 @@ export default function SignupPage() {
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Create your free account</CardTitle>
+    <Card className="w-full bg-white/20 backdrop-blur-md shadow-2xl border-white/30 rounded-2xl">
+      <CardHeader className="text-center space-y-1 pb-8">
+        <h1 className="text-4xl font-bold text-white">Churchable</h1>
+        <p className="text-white/90">Create your free account. No credit card required.</p>
       </CardHeader>
       
       <form onSubmit={handleSubmit}>
@@ -113,7 +115,7 @@ export default function SignupPage() {
           
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="firstName" className="text-white">First Name</Label>
               <Input
                 id="firstName"
                 name="firstName"
@@ -125,7 +127,7 @@ export default function SignupPage() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="lastName" className="text-white">Last Name</Label>
               <Input
                 id="lastName"
                 name="lastName"
@@ -138,7 +140,7 @@ export default function SignupPage() {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-white">Email</Label>
             <Input
               id="email"
               name="email"
@@ -151,7 +153,7 @@ export default function SignupPage() {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="organizationName">Church Name</Label>
+            <Label htmlFor="organizationName" className="text-white">Church Name</Label>
             <Input
               id="organizationName"
               name="organizationName"
@@ -163,7 +165,7 @@ export default function SignupPage() {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="country">Country</Label>
+            <Label htmlFor="country" className="text-white">Country</Label>
             <Input
               id="country"
               name="country"
@@ -175,7 +177,7 @@ export default function SignupPage() {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-white">Password</Label>
             <Input
               id="password"
               name="password"
@@ -188,7 +190,7 @@ export default function SignupPage() {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Label htmlFor="confirmPassword" className="text-white">Confirm Password</Label>
             <Input
               id="confirmPassword"
               name="confirmPassword"
@@ -201,15 +203,17 @@ export default function SignupPage() {
           </div>
         </CardContent>
         
-        <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full" disabled={isLoading}>
+        <CardFooter className="flex flex-col">
+          <Button type="submit" className="mx-auto px-8 rounded-full hover:scale-[1.02] hover:brightness-110 transition-all duration-200" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create Free Account
           </Button>
           
-          <p className="text-sm text-center text-warm-gray-600">
+          <div className="w-full border-t border-white/20 mt-8 mb-4"></div>
+          
+          <p className="text-sm text-center text-white/80">
             Already have an account?{' '}
-            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/login" className="font-medium text-white underline hover:text-white/90">
               Sign in
             </Link>
           </p>

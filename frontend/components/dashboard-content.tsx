@@ -31,16 +31,7 @@ export function DashboardContent({
     <div className="space-y-12">
       {/* Header */}
       <div className="text-center space-y-4">
-        <div className="flex justify-center items-center gap-3">
-          <div className="flex h-16 w-16 items-center justify-center border border-warm-gray-100 overflow-hidden bg-white">
-            <Image 
-              src="/churchable-logo-v1 .png" 
-              alt="Churchable Logo" 
-              width={64} 
-              height={64}
-              className="object-cover w-full h-full"
-            />
-          </div>
+        <div className="flex justify-center items-center">
           <h1 className="text-5xl font-black zorp-text-blue">CHURCHABLE</h1>
         </div>
         <p className="text-lg text-warm-gray-600 max-w-2xl mx-auto font-medium">

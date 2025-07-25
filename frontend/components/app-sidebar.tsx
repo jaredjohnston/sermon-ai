@@ -98,19 +98,8 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
   return (
     <Sidebar collapsible="icon" className="border-r-2 border-warm-gray-800 bg-warm-gray-50">
       <SidebarHeader className="border-b-2 border-warm-gray-800 bg-card">
-        <div className="flex items-center gap-3 px-4 py-4">
-          <div className="flex h-12 w-12 items-center justify-center border border-warm-gray-100 overflow-hidden bg-white">
-            <Image 
-              src="/churchable-logo-v1 .png" 
-              alt="Churchable Logo" 
-              width={48} 
-              height={48}
-              className="object-cover w-full h-full"
-            />
-          </div>
-          <div className="grid flex-1 text-left leading-tight">
-            <span className="truncate font-black text-lg zorp-text-blue">CHURCHABLE</span>
-          </div>
+        <div className="flex items-center px-4 py-4">
+          <span className="font-black text-lg zorp-text-blue">CHURCHABLE</span>
         </div>
       </SidebarHeader>
 
