@@ -334,9 +334,14 @@ export function Dashboard() {
 
       case "settings":
         return (
-          <div className="space-y-6">
-            <h1 className="text-3xl font-black text-warm-gray-900">SETTINGS</h1>
-            <p className="text-warm-gray-600 font-medium">Configure your preferences and account settings</p>
+          <div className="space-y-8">
+            {/* Header */}
+            <div>
+              <h1 className="text-3xl font-black text-warm-gray-900">SETTINGS</h1>
+              <p className="text-warm-gray-600 font-medium">Configure your preferences and account settings</p>
+            </div>
+            
+            {/* Coming Soon */}
             <div className="text-center py-12">
               <p className="text-warm-gray-600">Settings panel coming soon...</p>
             </div>
@@ -345,9 +350,14 @@ export function Dashboard() {
 
       case "help":
         return (
-          <div className="space-y-6">
-            <h1 className="text-3xl font-black text-warm-gray-900">HELP & SUPPORT</h1>
-            <p className="text-warm-gray-600 font-medium">Get help with using Churchable</p>
+          <div className="space-y-8">
+            {/* Header */}
+            <div>
+              <h1 className="text-3xl font-black text-warm-gray-900">HELP & SUPPORT</h1>
+              <p className="text-warm-gray-600 font-medium">Get help with using Churchable</p>
+            </div>
+            
+            {/* Coming Soon */}
             <div className="text-center py-12">
               <p className="text-warm-gray-600">Help documentation coming soon...</p>
             </div>
@@ -355,11 +365,16 @@ export function Dashboard() {
         )
       case "voice-style":
         return (
-          <div className="space-y-6">
-            <h1 className="text-3xl font-black text-warm-gray-900">VOICE & STYLE</h1>
-            <p className="text-warm-gray-600 font-medium">Customize your content voice and style preferences</p>
+          <div className="space-y-8">
+            {/* Header */}
+            <div>
+              <h1 className="text-3xl font-black text-warm-gray-900">TEMPLATES</h1>
+              <p className="text-warm-gray-600 font-medium">Manage or build custom templates for content generation</p>
+            </div>
+            
+            {/* Coming Soon */}
             <div className="text-center py-12">
-              <p className="text-warm-gray-600">Voice & Style customization coming soon...</p>
+              <p className="text-warm-gray-600">Template builder coming soon...</p>
             </div>
           </div>
         )

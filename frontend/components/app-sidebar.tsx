@@ -12,7 +12,7 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { Settings, HelpCircle, User, LogOut, Clock, Zap, Video, Mic } from "lucide-react"
+import { Settings, HelpCircle, User, LogOut, Clock, Zap, Video, Mic, Sparkles, BookOpen } from "lucide-react"
 import Image from "next/image"
 import type { SermonData } from "@/types/api"
 
@@ -47,36 +47,37 @@ function FileUploadIcon({ className }: { className?: string }) {
 
 const mainNavigation = [
   {
-    title: "Create Content",
+    title: "Upload Sermon",
     icon: FileUploadIcon,
     id: "dashboard",
-    description: "Upload & create content",
+    description: "Upload sermon files",
   },
   {
-    title: "Recently Created",
-    icon: Clock,
+    title: "Create Content",
+    icon: Sparkles,
     id: "library",
     description: "Your content library",
   },
   {
-    title: "AI Assistant",
+    title: "Templates",
+    icon: BookOpen,
+    id: "voice-style",
+    description: "Content templates",
+  },
+]
+
+const comingSoonNavigation = [
+  {
+    title: "AI Research",
     icon: Zap,
     id: "assistant",
-    description: "Sermon assistant",
+    description: "AI research assistant",
   },
   {
     title: "Create Social Clips",
     icon: Video,
     id: "video-clips",
     description: "Social media content",
-  },
-]
-
-const userNavigation = [
-  {
-    title: "Voice & Style",
-    icon: Mic,
-    id: "voice-style",
   },
 ]
 
@@ -126,9 +127,11 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
                       isActive={isActive}
                       onClick={() => onViewChange(item.id)}
                       tooltip={item.description}
-                      className="font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm"
+                      className={`font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm ${
+                        isActive ? 'bg-white shadow-sm' : ''
+                      }`}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
                       <span>{item.title.toUpperCase()}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -141,14 +144,14 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
         {/* Visual Divider */}
         <SidebarSeparator className="my-6 bg-warm-gray-200" />
 
-        {/* User Preferences Section */}
+        {/* Coming Soon Section */}
         <SidebarGroup>
           <div className="px-2 py-2 mb-2">
-            <h4 className="text-xs font-black text-warm-gray-600 uppercase tracking-wider">PREFERENCES</h4>
+            <h4 className="text-xs font-black text-warm-gray-600 uppercase tracking-wider">COMING SOON</h4>
           </div>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {userNavigation.map((item) => {
+              {comingSoonNavigation.map((item) => {
                 const Icon = item.icon
                 const isActive = currentView === item.id
                 return (
@@ -156,9 +159,11 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => onViewChange(item.id)}
-                      className="font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm"
+                      className={`font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm ${
+                        isActive ? 'bg-white shadow-sm' : ''
+                      }`}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
                       <span>{item.title.toUpperCase()}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -180,9 +185,11 @@ export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect 
                 <SidebarMenuButton
                   isActive={isActive}
                   onClick={() => onViewChange(item.id)}
-                  className="font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-warm-gray-50"
+                  className={`font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-warm-gray-50 ${
+                    isActive ? 'bg-warm-gray-50' : ''
+                  }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
                   <span>{item.title.toUpperCase()}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

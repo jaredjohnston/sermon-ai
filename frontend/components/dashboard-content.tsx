@@ -50,7 +50,7 @@ export function DashboardContent({
             </div>
             <div>
               <h3 className="font-black text-xl text-warm-gray-900 mb-3">UPLOAD</h3>
-              <p className="text-warm-gray-600 font-medium">Upload your sermon audio or video file securely. We support all major formats and files up to 100MB.</p>
+              <p className="text-warm-gray-600 font-medium">Build your templates then upload your sermon. We support all major file formats.</p>
             </div>
           </div>
 
@@ -60,8 +60,8 @@ export function DashboardContent({
               2
             </div>
             <div>
-              <h3 className="font-black text-xl text-warm-gray-900 mb-3">REVIEW</h3>
-              <p className="text-warm-gray-600 font-medium">Review and edit the AI-generated transcript to ensure accuracy before generating content.</p>
+              <h3 className="font-black text-xl text-warm-gray-900 mb-3">GENERATE</h3>
+              <p className="text-warm-gray-600 font-medium">Provide additional custom instructions before generating your content.</p>
             </div>
           </div>
 
@@ -71,8 +71,8 @@ export function DashboardContent({
               3
             </div>
             <div>
-              <h3 className="font-black text-xl text-warm-gray-900 mb-3">GENERATE</h3>
-              <p className="text-warm-gray-600 font-medium">Create summaries, key points, and social media content to share with your congregation.</p>
+              <h3 className="font-black text-xl text-warm-gray-900 mb-3">REVIEW</h3>
+              <p className="text-warm-gray-600 font-medium">Make any edits or finishing touches before sharing with your church.</p>
             </div>
           </div>
         </div>
@@ -144,8 +144,8 @@ export function DashboardContent({
               <div className="flex flex-col h-full">
                 <div className="p-6 pb-8">
                   <BookOpen className="h-10 w-10 text-primary mb-4" />
-                  <h3 className="font-black text-2xl mb-3 text-warm-gray-900">RECENTLY CREATED</h3>
-                  <p className="text-warm-gray-600 font-medium mb-6">Browse and manage your recently created content</p>
+                  <h3 className="font-black text-2xl mb-3 text-warm-gray-900">CREATE CONTENT</h3>
+                  <p className="text-warm-gray-600 font-medium mb-6">Browse and generate content from your sermons</p>
                   <Button
                     className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {
@@ -169,8 +169,8 @@ export function DashboardContent({
               <div className="flex flex-col h-full">
                 <div className="p-6 pb-8">
                   <Zap className="h-10 w-10 text-primary mb-4" />
-                  <h3 className="font-black text-2xl mb-3 text-warm-gray-900">AI ASSISTANT</h3>
-                  <p className="text-warm-gray-600 font-medium mb-6">Get intelligent help with sermon content preparation</p>
+                  <h3 className="font-black text-2xl mb-3 text-warm-gray-900">AI RESEARCH</h3>
+                  <p className="text-warm-gray-600 font-medium mb-6">Ask AI to research a topic and help prepare your sermon</p>
                   <Button
                     className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {

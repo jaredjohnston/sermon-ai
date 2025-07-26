@@ -20,14 +20,12 @@ const SUPPORTED_FORMATS = [
   "audio/mpeg",
   "audio/wav",
   "audio/mp3",
-  "audio/m4a",
   "video/mp4",
-  "video/avi",
-  "video/mov",
-  "video/wmv",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]
 
-const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "mp4", "avi", "mov", "wmv"]
+const SUPPORTED_EXTENSIONS = ["mp3", "wav", "mp4", "pdf", "docx"]
 
 export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: UploadZoneProps) {
   const [uploading, setUploading] = useState(false)
@@ -45,7 +43,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
         !SUPPORTED_FORMATS.includes(file.type) &&
         !SUPPORTED_EXTENSIONS.some((ext) => file.name.toLowerCase().endsWith(`.${ext}`))
       ) {
-        setError("Unsupported file format. Please upload an audio or video file.")
+        setError("Unsupported file format. Please upload an audio, video, PDF, or Word document file.")
         return
       }
 
@@ -97,8 +95,10 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "audio/*": [".mp3", ".wav", ".m4a"],
-      "video/*": [".mp4", ".avi", ".mov", ".wmv"],
+      "audio/*": [".mp3", ".wav"],
+      "video/*": [".mp4"],
+      "application/pdf": [".pdf"],
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
     },
     multiple: false,
     disabled: uploading,
@@ -139,15 +139,15 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
                       ? "Your sermon has been uploaded successfully"
                       : isDragActive
                         ? "Drop your file here"
-                        : "Drag and drop your audio or video file here, or click to browse"}
+                        : "Drag and drop your audio, video, PDF, or Word document here, or click to browse"}
                 </p>
               </div>
 
               {!uploading && !success && (
                 <div className="text-center p-4 bg-gray-50 border-2 border-gray-300">
-                  <p className="font-bold mb-2">SUPPORTED FORMATS:</p>
+                  <p className="font-bold mb-2">FORMATS:</p>
                   <p className="font-medium mb-2">{SUPPORTED_EXTENSIONS.join(", ").toUpperCase()}</p>
-                  <p className="text-sm font-medium text-gray-600">Maximum file size: 100MB</p>
+                  <p className="text-sm font-medium text-gray-600">Maximum file size: 10GB</p>
                 </div>
               )}
 

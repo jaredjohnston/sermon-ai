@@ -9,7 +9,7 @@ export function AIAssistant() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-black text-warm-gray-900">AI ASSISTANT</h1>
+        <h1 className="text-3xl font-black text-warm-gray-900">AI RESEARCH</h1>
         <p className="text-warm-gray-600 font-medium">Get intelligent help with your sermon content and preparation</p>
       </div>
 
@@ -19,7 +19,7 @@ export function AIAssistant() {
           <div className="rounded-full bg-blue-100 p-4 w-16 h-16 mx-auto mb-4">
             <Bot className="h-8 w-8" style={{ color: "#0000ee" }} />
           </div>
-          <h2 className="text-2xl font-black mb-2 text-warm-gray-900">AI ASSISTANT COMING SOON</h2>
+          <h2 className="text-2xl font-black mb-2 text-warm-gray-900">AI RESEARCH COMING SOON</h2>
           <p className="text-warm-gray-600 font-medium max-w-lg mx-auto mb-6">
             Your AI thought-partner for sermon preparation. Get outlines, openers, and biblical references while
             maintaining your unique voice and style.

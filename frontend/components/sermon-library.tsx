@@ -92,8 +92,8 @@ export function SermonLibrary({
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-black text-warm-gray-900">RECENTLY CREATED</h1>
-        <p className="text-warm-gray-600 font-medium">View and manage your recently created content</p>
+        <h1 className="text-3xl font-black text-warm-gray-900">CREATE CONTENT</h1>
+        <p className="text-warm-gray-600 font-medium">Create and manage content from sermon uploads</p>
       </div>
 
       {/* Filters */}
