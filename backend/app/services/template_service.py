@@ -133,7 +133,7 @@ class TemplateService:
         refresh_token: str = None,
         status: Optional[TemplateStatus] = None,
         content_type_name: Optional[str] = None
-    ) -> List[ContentTemplate]:
+    ) -> List[Dict[str, Any]]:
         """List all content templates for user's client"""
         try:
             client = await supabase_service.create_user_authenticated_client(access_token, refresh_token)
@@ -143,10 +143,9 @@ class TemplateService:
             if not user_client:
                 raise ValidationError("User does not belong to any client")
             
-            query = client.table('content_templates')\
+            query = client.table('content_templates_with_creator')\
                 .select("*")\
                 .eq("client_id", str(user_client.id))\
-                .is_("deleted_at", "null")\
                 .order("created_at", desc=True)
             
             # Apply filters
@@ -158,7 +157,8 @@ class TemplateService:
             
             response = await query.execute()
             
-            return [ContentTemplate(**template) for template in response.data]
+            # Return raw dict data to preserve all fields from view
+            return response.data
             
         except Exception as e:
             self.logger.error(f"Error listing content templates: {str(e)}", exc_info=True)
@@ -199,7 +199,48 @@ class TemplateService:
                 update_data["structured_prompt"] = updates.structured_prompt
             
             if updates.example_content is not None:
-                update_data["example_content"] = updates.example_content
+                # Check if examples actually changed
+                current_examples = existing_template.example_content or []
+                new_examples = updates.example_content
+                
+                if current_examples != new_examples:
+                    # Examples changed - need to regenerate structured prompt
+                    from app.services.pattern_extraction_service import pattern_extraction_service, PatternExtractionError
+                    
+                    try:
+                        # Extract patterns from new examples
+                        analysis_result = await pattern_extraction_service.extract_patterns(
+                            examples=new_examples,
+                            content_type_name=existing_template.content_type_name,
+                            description=existing_template.description
+                        )
+                        
+                        # Generate new structured prompt
+                        new_structured_prompt = await pattern_extraction_service.generate_structured_prompt(analysis_result)
+                        
+                        # Validate confidence threshold
+                        from app.config.settings import settings
+                        min_confidence = getattr(settings, 'PATTERN_CONFIDENCE_THRESHOLD', 0.7)
+                        if analysis_result.confidence_score < min_confidence:
+                            raise ValidationError(
+                                f"Pattern extraction confidence too low ({analysis_result.confidence_score:.2f}). "
+                                f"Please provide more consistent examples."
+                            )
+                        
+                        # Update both examples and structured prompt
+                        update_data["example_content"] = new_examples
+                        update_data["structured_prompt"] = new_structured_prompt
+                        
+                        self.logger.info(
+                            f"Regenerated structured prompt for template {template_id}: "
+                            f"confidence={analysis_result.confidence_score:.3f}"
+                        )
+                        
+                    except PatternExtractionError as e:
+                        raise ValidationError(f"Failed to regenerate template from examples: {str(e)}")
+                else:
+                    # Examples unchanged - just update the field
+                    update_data["example_content"] = updates.example_content
             
             if updates.status is not None:
                 update_data["status"] = updates.status.value

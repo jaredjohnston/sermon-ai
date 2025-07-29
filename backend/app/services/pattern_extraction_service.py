@@ -43,7 +43,13 @@ class PatternExtractionService:
         Examples:
         {examples}
         
-        Return analysis as JSON with confidence score (0-1).
+        Return analysis as JSON in this exact format:
+        {{
+          "style_patterns": ["pattern1", "pattern2", ...],
+          "tone_analysis": "description of tone and voice",
+          "confidence_score": 0.85
+        }}
+        The confidence_score should reflect how consistent the examples are (0.0-1.0).
         """
         
         self.STRUCTURE_ANALYSIS_PROMPT = """
@@ -57,7 +63,13 @@ class PatternExtractionService:
         Examples:
         {examples}
         
-        Return analysis as JSON with confidence score (0-1).
+        Return analysis as JSON in this exact format:
+        {{
+          "structure_patterns": ["pattern1", "pattern2", ...],
+          "format_requirements": "description of formatting and organization",
+          "confidence_score": 0.85
+        }}
+        The confidence_score should reflect how consistent the structural patterns are (0.0-1.0).
         """
         
         self.TEMPLATE_GENERATION_PROMPT = """
@@ -232,7 +244,10 @@ class PatternExtractionService:
                 response_format={"type": "json_object"}
             )
             
-            return json.loads(response.choices[0].message.content)
+            result = json.loads(response.choices[0].message.content)
+            self.logger.info(f"Style analysis response keys: {list(result.keys())}")
+            self.logger.debug(f"Full style analysis response: {result}")
+            return result
             
         except Exception as e:
             self.logger.error(f"Style analysis failed: {str(e)}")
@@ -263,7 +278,10 @@ class PatternExtractionService:
                 response_format={"type": "json_object"}
             )
             
-            return json.loads(response.choices[0].message.content)
+            result = json.loads(response.choices[0].message.content)
+            self.logger.info(f"Structure analysis response keys: {list(result.keys())}")
+            self.logger.debug(f"Full structure analysis response: {result}")
+            return result
             
         except Exception as e:
             self.logger.error(f"Structure analysis failed: {str(e)}")
@@ -289,45 +307,83 @@ class PatternExtractionService:
                 raise PatternExtractionError(f"Example {i+1} is too long (maximum 10,000 characters)")
 
     def _combine_analyses(self, style_analysis: Dict, structure_analysis: Dict) -> Dict[str, Any]:
-        """Combine style and structure analyses"""
-        return {
+        """Combine style and structure analyses, preserving confidence scores"""
+        combined = {
             "style": style_analysis.get("style_patterns", {}),
             "structure": structure_analysis.get("structure_patterns", {}),
             "tone": style_analysis.get("tone_analysis", {}),
             "format": structure_analysis.get("format_requirements", {})
         }
+        
+        # Preserve confidence scores from original analyses
+        style_confidence = style_analysis.get("confidence_score")
+        structure_confidence = structure_analysis.get("confidence_score")
+        
+        if style_confidence is not None:
+            combined["style_confidence"] = style_confidence
+        if structure_confidence is not None:
+            combined["structure_confidence"] = structure_confidence
+            
+        return combined
 
     def _calculate_confidence_score(self, combined_analysis: Dict[str, Any]) -> float:
         """Calculate overall confidence score for pattern extraction"""
         try:
             scores = []
             
-            # Check each analysis component
-            for component_name, component_data in combined_analysis.items():
-                if isinstance(component_data, dict):
-                    # Look for confidence scores in the component
-                    component_confidence = component_data.get("confidence_score", 0.5)
-                    scores.append(float(component_confidence))
-                    
-                    # Boost confidence for detailed analysis
-                    detail_count = len([k for k, v in component_data.items() 
-                                      if v and k != "confidence_score"])
-                    if detail_count >= 3:
-                        scores.append(0.1)  # Bonus for detailed analysis
+            # Get direct confidence scores from style and structure analyses
+            style_confidence = combined_analysis.get("style_confidence")
+            structure_confidence = combined_analysis.get("structure_confidence")
+            
+            if style_confidence is not None:
+                scores.append(float(style_confidence))
+                self.logger.debug(f"Style confidence: {style_confidence}")
+            
+            if structure_confidence is not None:
+                scores.append(float(structure_confidence))
+                self.logger.debug(f"Structure confidence: {structure_confidence}")
+            
+            # Fallback: check nested confidence scores in components
+            if not scores:
+                self.logger.warning("No direct confidence scores found, checking nested components")
+                for component_name, component_data in combined_analysis.items():
+                    if isinstance(component_data, dict):
+                        component_confidence = component_data.get("confidence_score")
+                        if component_confidence is not None:
+                            scores.append(float(component_confidence))
+                            self.logger.debug(f"{component_name} confidence: {component_confidence}")
+            
+            # Quality bonus based on analysis detail
+            analysis_components = ["style", "structure", "tone", "format"]
+            detailed_components = sum(1 for comp in analysis_components 
+                                    if combined_analysis.get(comp) and 
+                                    isinstance(combined_analysis[comp], dict) and 
+                                    len(combined_analysis[comp]) >= 2)
+            
+            if detailed_components >= 3:
+                scores.append(0.05)  # Small bonus for comprehensive analysis
+                self.logger.debug(f"Quality bonus applied: {detailed_components} detailed components")
             
             if not scores:
+                self.logger.warning("No confidence scores found anywhere, using default")
                 return 0.5  # Default moderate confidence
             
-            # Average the scores with a minimum threshold
-            avg_score = sum(scores) / len(scores)
+            # Calculate weighted average (give more weight to direct AI confidence)
+            if len(scores) >= 2 and scores[-1] == 0.05:  # Has quality bonus
+                # Average main scores, then add small bonus
+                main_scores = scores[:-1]
+                avg_score = sum(main_scores) / len(main_scores) + scores[-1]
+            else:
+                avg_score = sum(scores) / len(scores)
             
             # Ensure score is within valid range
             confidence = max(0.0, min(1.0, avg_score))
             
+            self.logger.info(f"Final confidence calculation: scores={scores}, avg={avg_score}, final={confidence}")
             return round(confidence, 3)
             
         except Exception as e:
-            self.logger.warning(f"Confidence calculation failed: {str(e)}")
+            self.logger.error(f"Confidence calculation failed: {str(e)}", exc_info=True)
             return 0.5  # Default to moderate confidence
 
 # Create singleton instance

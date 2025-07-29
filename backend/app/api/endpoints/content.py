@@ -5,8 +5,9 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from app.models.schemas import (
     ContentGenerationRequest, ContentGenerationResponse,
     ContentTemplate, ContentTemplateCreate, ContentTemplateUpdate, ContentTemplatePublic,
+    ContentTemplateListItem,
     GeneratedContentModel, TemplateStatus,
-    TemplateExtractionRequest, TemplateExtractionResponse
+    TemplateExtractionRequest, TemplateExtractionResponse, CreateTemplateRequest
 )
 from app.services.content_service import content_service
 from app.services.template_service import template_service, TemplateServiceError
@@ -23,12 +24,36 @@ router = APIRouter()
 
 @router.post("/templates", response_model=ContentTemplatePublic, status_code=status.HTTP_201_CREATED)
 async def create_template(
-    template: ContentTemplateCreate,
+    request: CreateTemplateRequest,
     auth: AuthContext = Depends(get_auth_context)
 ):
     """Create a new content template"""
     try:
-        logger.info(f"Creating content template '{template.name}' for client {template.client_id}")
+        # Get user's client using the established pattern from other endpoints
+        client = await supabase_service.get_user_client(auth.user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User not associated with client"
+            )
+        
+        logger.info(f"Creating content template '{request.name}' for client {client.id}")
+        
+        # Create the full template object with client_id
+        template = ContentTemplateCreate(
+            client_id=client.id,
+            name=request.name,
+            description=request.description,
+            content_type_name=request.content_type_name,
+            structured_prompt=request.structured_prompt,
+            example_content=request.example_content or [],
+            status=TemplateStatus.active,  # Always start as active
+            model_settings=request.model_settings or {
+                "temperature": 0.7,
+                "max_tokens": 2000,
+                "model": "gpt-4o"
+            }
+        )
         
         created_template = await template_service.create_template(
             template, auth.user.id, auth.access_token
@@ -52,7 +77,7 @@ async def create_template(
             detail="Failed to create template"
         )
 
-@router.get("/templates", response_model=List[ContentTemplatePublic])
+@router.get("/templates", response_model=List[ContentTemplateListItem])
 async def list_templates(
     status_filter: Optional[TemplateStatus] = None,
     content_type_name: Optional[str] = None,
@@ -71,8 +96,8 @@ async def list_templates(
         
         logger.info(f"Found {len(templates)} templates")
         
-        # Return public versions (excludes structured_prompt)
-        return [ContentTemplatePublic(**template.dict()) for template in templates]
+        # Return list response models with creator names from view
+        return [ContentTemplateListItem(**template_dict) for template_dict in templates]
         
     except TemplateServiceError as e:
         logger.error(f"Template listing error: {str(e)}")

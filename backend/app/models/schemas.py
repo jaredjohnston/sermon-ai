@@ -288,6 +288,22 @@ class ContentTemplateBase(BaseModel):
         "model": "gpt-4o"
     })
 
+class CreateTemplateRequest(BaseModel):
+    """Frontend request schema for creating templates (no client_id required)"""
+    model_config = {"protected_namespaces": ()}
+    
+    name: str = Field(..., min_length=2, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    content_type_name: str = Field(..., min_length=2, max_length=50)
+    structured_prompt: str = Field(..., min_length=50, max_length=5000)
+    example_content: Optional[List[str]] = Field(default_factory=list)
+    model_settings: Optional[Dict[str, Any]] = Field(default_factory=lambda: {
+        "temperature": 0.7,
+        "max_tokens": 2000,
+        "model": "gpt-4o"
+    })
+    # Note: status is set automatically to 'active', not provided by frontend
+
 class ContentTemplateCreate(ContentTemplateBase):
     """Content template creation model"""
     client_id: UUID
@@ -310,7 +326,7 @@ class ContentTemplateUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     structured_prompt: Optional[str] = Field(None, min_length=50, max_length=5000)
-    example_content: Optional[List[str]] = None
+    example_content: Optional[List[str]] = Field(None, min_items=2, max_items=5)
     status: Optional[TemplateStatus] = None
     model_settings: Optional[Dict[str, Any]] = None
 
@@ -319,10 +335,50 @@ class ContentTemplatePublic(BaseModel):
     model_config = {"protected_namespaces": ()}
     
     id: UUID
+    client_id: UUID
     name: str
     description: Optional[str] = None
     content_type_name: str
     example_content: List[str] = Field(default_factory=list)
+    status: TemplateStatus
+    model_settings: Dict[str, Any] = Field(default_factory=lambda: {
+        "temperature": 0.7,
+        "max_tokens": 2000,
+        "model": "gpt-4o"
+    })
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+    creator_name: Optional[str] = None  # Populated from user_profiles join
+    # Note: structured_prompt is intentionally excluded for IP protection
+
+class ContentTemplateListItem(BaseModel):
+    """Response model for template list items - includes creator info from view join"""
+    model_config = {"protected_namespaces": ()}
+    
+    id: UUID
+    client_id: UUID
+    name: str
+    description: Optional[str] = None
+    content_type_name: str
+    example_content: List[str] = Field(default_factory=list)
+    status: TemplateStatus
+    model_settings: Dict[str, Any] = Field(default_factory=lambda: {
+        "temperature": 0.7,
+        "max_tokens": 2000,
+        "model": "gpt-4o"
+    })
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[UUID] = None
+    creator_name: Optional[str] = None  # From database view join
+    # Note: structured_prompt is intentionally excluded for IP protection
 
 # Generated Content Models
 class GeneratedContentBase(BaseModel):
