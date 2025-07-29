@@ -23,8 +23,8 @@ import {
 } from "lucide-react"
 import type { ContentSource } from "@/types/api"
 
-interface SermonLibraryProps {
-  sermons: ContentSource[]
+interface ContentLibraryProps {
+  contents: ContentSource[]
   onContentSelect: (content: ContentSource) => void
   onContentDelete: (contentId: string) => void
   onTranscriptEdit: (content: ContentSource) => void
@@ -64,19 +64,19 @@ const STATUS_CONFIG = {
   },
 }
 
-export function SermonLibrary({
-  sermons,
+export function ContentLibrary({
+  contents,
   onContentSelect,
   onContentDelete,
   onTranscriptEdit,
   onContentEdit,
-}: SermonLibraryProps) {
+}: ContentLibraryProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
 
-  const filteredSermons = sermons.filter((sermon) => {
-    const matchesSearch = sermon.filename.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || sermon.status === statusFilter
+  const filteredContents = contents.filter((content) => {
+    const matchesSearch = content.filename.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === "all" || content.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -132,7 +132,7 @@ export function SermonLibrary({
       </Card>
 
       {/* Sermons List */}
-      {filteredSermons.length === 0 ? (
+      {filteredContents.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -146,22 +146,22 @@ export function SermonLibrary({
         </Card>
       ) : (
         <div className="space-y-4">
-          {filteredSermons.map((sermon) => {
-            const statusConfig = STATUS_CONFIG[sermon.status]
+          {filteredContents.map((content) => {
+            const statusConfig = STATUS_CONFIG[content.status]
             const StatusIcon = statusConfig.icon
-            const hasContent = Boolean(sermon.content)
+            const hasContent = Boolean(content.content)
 
             return (
-              <Card key={sermon.id} className="hover:shadow-md transition-shadow">
+              <Card key={content.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center flex-1 min-w-0">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold truncate">{sermon.filename}</h3>
+                        <h3 className="font-semibold truncate">{content.filename}</h3>
                         <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
                           <div className="flex items-center space-x-1">
                             <Calendar className="h-3 w-3" />
-                            <span>{formatDate(sermon.uploadedAt)}</span>
+                            <span>{formatDate(content.uploadedAt)}</span>
                           </div>
                           <Badge className={statusConfig.color}>
                             <StatusIcon className="h-3 w-3 mr-1" />
@@ -176,7 +176,7 @@ export function SermonLibrary({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onTranscriptEdit(sermon)}
+                        onClick={() => onTranscriptEdit(content)}
                         className="whitespace-nowrap"
                       >
                         <Edit3 className="h-4 w-4 mr-2" />
@@ -187,7 +187,7 @@ export function SermonLibrary({
                         <Button
                           className="zorp-button whitespace-nowrap"
                           size="sm"
-                          onClick={() => onContentEdit(sermon)}
+                          onClick={() => onContentEdit(content)}
                         >
                           <Sparkles className="h-4 w-4 mr-2" />
                           Review Content
@@ -206,7 +206,7 @@ export function SermonLibrary({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onContentSelect(sermon)}>
+                          <DropdownMenuItem onClick={() => onContentSelect(content)}>
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
@@ -216,7 +216,7 @@ export function SermonLibrary({
                               Export Content
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem onClick={() => onContentDelete(sermon.id)} className="text-red-600">
+                          <DropdownMenuItem onClick={() => onContentDelete(content.id)} className="text-red-600">
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>

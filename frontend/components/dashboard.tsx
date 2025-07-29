@@ -16,7 +16,7 @@ import { AppSidebar } from "./app-sidebar"
 import { ProcessingStatus } from "./processing-status"
 import { GeneratedContent } from "./generated-content"
 import { DashboardContent } from "./dashboard-content"
-import { SermonLibrary } from "./sermon-library"
+import { ContentLibrary } from "./content-library"
 import { AIAssistant } from "./ai-assistant"
 import { TranscriptViewer } from "./transcript-viewer"
 import { VideoClips } from "./video-clips"
@@ -118,9 +118,9 @@ Let us pray together...`,
 ]
 
 export function Dashboard() {
-  const [sermons, setSermons] = useState<ContentSource[]>([])
+  const [contents, setContents] = useState<ContentSource[]>([])
   const [currentStage, setCurrentStage] = useState<ProcessingStage>("idle")
-  const [currentSermon, setCurrentSermon] = useState<ContentSource | null>(null)
+  const [currentContent, setCurrentContent] = useState<ContentSource | null>(null)
   const [currentView, setCurrentView] = useState("dashboard")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -160,11 +160,11 @@ export function Dashboard() {
       // Transform backend data to frontend format
       const contentSources = transformTranscriptListToContentSources(response.transcripts)
       
-      setSermons(contentSources)
+      setContents(contentSources)
       
       // If no transcripts found, show sample data temporarily
       if (contentSources.length === 0) {
-        setSermons(SAMPLE_SERMONS)
+        setContents(SAMPLE_SERMONS)
       }
       
     } catch (error) {
@@ -172,7 +172,7 @@ export function Dashboard() {
       setError(error instanceof Error ? error.message : 'Failed to load transcripts')
       
       // Fallback to sample data on error
-      setSermons(SAMPLE_SERMONS)
+      setContents(SAMPLE_SERMONS)
       
       toast({
         title: "Failed to load transcripts",
@@ -190,7 +190,7 @@ export function Dashboard() {
   }
 
   const handleUploadSuccess = async (data: TranscriptionResponse) => {
-    const newSermon: ContentSource = {
+    const newContent: ContentSource = {
       id: Date.now().toString(),
       filename: data.filename,
       transcript: undefined, // Transcript will be populated when transcription completes
@@ -198,8 +198,8 @@ export function Dashboard() {
       status: "transcribing",
     }
 
-    setCurrentSermon(newSermon)
-    setSermons((prev) => [newSermon, ...prev])
+    setCurrentContent(newContent)
+    setContents((prev) => [newContent, ...prev])
 
     // Refresh transcript list to get the latest data
     loadTranscripts()
@@ -221,7 +221,7 @@ export function Dashboard() {
 
   const handleRetry = () => {
     setCurrentStage("idle")
-    setCurrentSermon(null)
+    setCurrentContent(null)
     setError(null)
     setCurrentView("dashboard")
     
@@ -235,13 +235,13 @@ export function Dashboard() {
     setCurrentView(view)
     if (view === "dashboard") {
       setCurrentStage("idle")
-      setCurrentSermon(null)
+      setCurrentContent(null)
       setError(null)
     }
   }
 
   const handleContentSelect = (content: ContentSource) => {
-    setCurrentSermon(content)
+    setCurrentContent(content)
     if (content.content) {
       setCurrentView("content")
       setCurrentStage("completed")
@@ -251,9 +251,9 @@ export function Dashboard() {
   }
 
   const handleContentDelete = (contentId: string) => {
-    setSermons((prev) => prev.filter((s) => s.id !== contentId))
-    if (currentSermon?.id === contentId) {
-      setCurrentSermon(null)
+    setContents((prev) => prev.filter((s) => s.id !== contentId))
+    if (currentContent?.id === contentId) {
+      setCurrentContent(null)
       setCurrentStage("idle")
       setCurrentView("dashboard")
     }
@@ -263,23 +263,23 @@ export function Dashboard() {
     })
   }
 
-  const handleTranscriptEdit = (sermon: ContentSource) => {
-    setCurrentSermon(sermon)
+  const handleTranscriptEdit = (content: ContentSource) => {
+    setCurrentContent(content)
     setCurrentView("transcript-editor")
   }
 
-  const handleContentEdit = (sermon: ContentSource) => {
-    setCurrentSermon(sermon)
+  const handleContentEdit = (content: ContentSource) => {
+    setCurrentContent(content)
     setCurrentView("content")
   }
 
   // Transcript editing removed - transcripts are 99% accurate from Deepgram
 
-  const handleContentGenerated = (sermonId: string, contentResponse: ContentResponse) => {
+  const handleContentGenerated = (contentId: string, contentResponse: ContentResponse) => {
     const generatedContent: GeneratedContentModel = {
       id: contentResponse.id,
       client_id: "client-1", // This would come from user context
-      transcript_id: sermonId,
+      transcript_id: contentId,
       template_id: contentResponse.metadata.template_id,
       content: contentResponse.content,
       content_metadata: { template_name: contentResponse.metadata.template_name },
@@ -293,17 +293,17 @@ export function Dashboard() {
       updated_by: "user-1", // This would come from user context
     }
     
-    setSermons((prev) =>
-      prev.map((sermon) => 
-        sermon.id === sermonId 
-          ? { ...sermon, content: [...(sermon.content || []), generatedContent], status: "completed" }
-          : sermon
+    setContents((prev) =>
+      prev.map((content) => 
+        content.id === contentId 
+          ? { ...content, content: [...(content.content || []), generatedContent], status: "completed" }
+          : content
       ),
     )
-    if (currentSermon?.id === sermonId) {
-      setCurrentSermon({ 
-        ...currentSermon, 
-        content: [...(currentSermon.content || []), generatedContent], 
+    if (currentContent?.id === contentId) {
+      setCurrentContent({ 
+        ...currentContent, 
+        content: [...(currentContent.content || []), generatedContent], 
         status: "completed" 
       })
       setCurrentView("content")
@@ -327,18 +327,18 @@ export function Dashboard() {
     // Show processing status if currently processing
     if (["uploading", "transcribing", "generating", "error"].includes(currentStage)) {
       return (
-        <ProcessingStatus stage={currentStage} filename={currentSermon?.filename} error={error || undefined} onRetry={handleRetry} />
+        <ProcessingStatus stage={currentStage} filename={currentContent?.filename} error={error || undefined} onRetry={handleRetry} />
       )
     }
 
     switch (currentView) {
       case "content":
-        if (currentSermon?.content) {
+        if (currentContent?.content) {
           return (
             <GeneratedContent
-              content={currentSermon.content}
-              generatedAt={currentSermon.uploadedAt}
-              filename={currentSermon.filename}
+              content={currentContent.content}
+              generatedAt={currentContent.uploadedAt}
+              filename={currentContent.filename}
               onBack={() => setCurrentView("library")}
             />
           )
@@ -352,8 +352,8 @@ export function Dashboard() {
 
       case "library":
         return (
-          <SermonLibrary
-            sermons={sermons}
+          <ContentLibrary
+            contents={contents}
             onContentSelect={handleContentSelect}
             onContentDelete={handleContentDelete}
             onTranscriptEdit={handleTranscriptEdit}
@@ -362,10 +362,10 @@ export function Dashboard() {
         )
 
       case "transcript-editor":
-        if (currentSermon) {
+        if (currentContent) {
           return (
             <TranscriptViewer
-              sermon={currentSermon}
+              content={currentContent}
               onContentGenerated={handleContentGenerated}
               onBack={() => setCurrentView("library")}
             />
@@ -432,7 +432,7 @@ export function Dashboard() {
       default:
         return (
           <DashboardContent
-            sermons={sermons}
+            contents={contents}
             onViewChange={handleViewChange}
             onUploadStart={handleUploadStart}
             onUploadSuccess={handleUploadSuccess}
@@ -447,7 +447,7 @@ export function Dashboard() {
   return (
     <SidebarProvider>
       <AppSidebar
-        sermons={sermons}
+        contents={contents}
         currentView={currentView}
         onViewChange={handleViewChange}
         onContentSelect={handleContentSelect}

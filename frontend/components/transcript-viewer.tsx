@@ -26,13 +26,13 @@ import { useApiClient } from "@/lib/api-client"
 import type { ContentSource, ContentResponse, ContentTemplatePublic } from "@/types/api"
 
 interface TranscriptViewerProps {
-  sermon: ContentSource
-  onContentGenerated: (sermonId: string, contentResponse: ContentResponse) => void
+  content: ContentSource
+  onContentGenerated: (contentId: string, contentResponse: ContentResponse) => void
   onBack: () => void
 }
 
-export function TranscriptViewer({ sermon, onContentGenerated, onBack }: TranscriptViewerProps) {
-  const transcriptText = sermon.transcript?.content?.full_transcript || ""
+export function TranscriptViewer({ content, onContentGenerated, onBack }: TranscriptViewerProps) {
+  const transcriptText = content.transcript?.content?.full_transcript || ""
   const apiClient = useApiClient()
   const { toast } = useToast()
   
@@ -157,7 +157,7 @@ export function TranscriptViewer({ sermon, onContentGenerated, onBack }: Transcr
             Back to Library
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{sermon.filename}</h1>
+            <h1 className="text-2xl font-bold">{content.filename}</h1>
             <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />

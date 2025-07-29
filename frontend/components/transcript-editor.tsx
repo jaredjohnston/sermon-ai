@@ -33,13 +33,13 @@ import { generateContent } from "@/lib/api"
 import type { ContentSource, ContentResponse } from "@/types/api"
 
 interface TranscriptEditorProps {
-  sermon: ContentSource
-  onContentGenerated: (sermonId: string, contentResponse: ContentResponse) => void
+  content: ContentSource
+  onContentGenerated: (contentId: string, contentResponse: ContentResponse) => void
   onBack: () => void
 }
 
-export function TranscriptEditor({ sermon, onContentGenerated, onBack }: TranscriptEditorProps) {
-  const transcriptText = sermon.transcript?.content?.full_transcript || ""
+export function TranscriptEditor({ content, onContentGenerated, onBack }: TranscriptEditorProps) {
+  const transcriptText = content.transcript?.content?.full_transcript || ""
   const [transcript, setTranscript] = useState(transcriptText)
   const [originalTranscript] = useState(transcriptText)
   const [isEditing, setIsEditing] = useState(false) // Read-only mode since editing is no longer needed
@@ -85,7 +85,7 @@ export function TranscriptEditor({ sermon, onContentGenerated, onBack }: Transcr
   // Transcript editing removed - transcripts are read-only
 
   const handleCancel = () => {
-    const originalText = sermon.transcript?.content?.full_transcript || ""
+    const originalText = content.transcript?.content?.full_transcript || ""
     if (editorRef.current) {
       editorRef.current.innerHTML = originalText
     }
@@ -190,7 +190,7 @@ export function TranscriptEditor({ sermon, onContentGenerated, onBack }: Transcr
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `${sermon.filename}_transcript.txt`
+    a.download = `${content.filename}_transcript.txt`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -238,9 +238,9 @@ export function TranscriptEditor({ sermon, onContentGenerated, onBack }: Transcr
         <CardHeader className="border-b-2 border-warm-gray-800 bg-warm-gray-50">
           <CardTitle className="flex items-center">
             <div>
-              <span className="font-black">{sermon.filename}</span>
+              <span className="font-black">{content.filename}</span>
               <div className="flex items-center space-x-4 text-sm text-warm-gray-600 mt-1">
-                <span>Uploaded: {formatDate(sermon.uploadedAt)}</span>
+                <span>Uploaded: {formatDate(content.uploadedAt)}</span>
                 <Badge className="bg-green-100 text-green-800">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   Transcribed

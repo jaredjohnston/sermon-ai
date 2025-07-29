@@ -8,7 +8,7 @@ import Image from "next/image"
 import type { ContentSource, TranscriptionResponse } from "@/types/api"
 
 interface DashboardContentProps {
-  sermons: ContentSource[]
+  contents: ContentSource[]
   onViewChange: (view: string) => void
   onUploadStart: () => void
   onUploadSuccess: (data: TranscriptionResponse) => void
@@ -19,7 +19,7 @@ interface DashboardContentProps {
 
 
 export function DashboardContent({
-  sermons,
+  contents,
   onViewChange,
   onUploadStart,
   onUploadSuccess,
@@ -79,7 +79,7 @@ export function DashboardContent({
       </div>
 
       {/* Recent Sermons */}
-      {sermons.length > 0 && (
+      {contents.length > 0 && (
         <div className="space-y-6">
           <div className="flex items-center">
             <h2 className="text-3xl font-black text-warm-gray-900">RECENTLY CREATED</h2>
@@ -89,15 +89,15 @@ export function DashboardContent({
             </Button>
           </div>
           <div className="space-y-4">
-            {sermons.slice(0, 3).map((sermon) => (
-              <Card key={sermon.id} className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+            {contents.slice(0, 3).map((content) => (
+              <Card key={content.id} className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center">
                       <div>
-                        <p className="font-bold text-lg text-warm-gray-900">{sermon.filename}</p>
+                        <p className="font-bold text-lg text-warm-gray-900">{content.filename}</p>
                         <p className="text-warm-gray-600 font-medium">
-                          {new Date(sermon.uploadedAt).toLocaleDateString()}
+                          {new Date(content.uploadedAt).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
@@ -107,8 +107,8 @@ export function DashboardContent({
                         Edit Transcript
                       </Button>
 
-                      {sermon.content ? (
-                        <Button className="px-4 rounded-full" size="sm" onClick={() => onContentEdit(sermon)}>
+                      {content.content ? (
+                        <Button className="px-4 rounded-full" size="sm" onClick={() => onContentEdit(content)}>
                           <Sparkles className="h-4 w-4 mr-2" />
                           Review Content
                         </Button>
