@@ -20,30 +20,42 @@ export async function uploadSermon(
       size_bytes: file.size,
     }
     
+    console.log('Preparing upload for:', prepareRequest)
     const uploadConfig = await apiClient.prepareUpload(prepareRequest)
+    console.log('Upload config received:', uploadConfig)
     
     // Upload file
+    console.log('Uploading to:', uploadConfig.upload_url)
     const uploadResponse = await apiClient.uploadFile(
       uploadConfig.upload_url,
       uploadConfig.upload_fields,
       file
     )
     
+    console.log('Upload response status:', uploadResponse.status)
     if (!uploadResponse.ok) {
-      throw new Error('Upload failed')
+      const errorText = await uploadResponse.text()
+      console.error('Upload failed with response:', errorText)
+      throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`)
     }
     
-    // Return transcription response
+    // After successful upload, we need to trigger the transcription webhook
+    // The backend should have already started processing after the upload
+    // For now, return a response that matches what the dashboard expects
     return {
       id: uploadConfig.media_id,
+      transcript_id: uploadConfig.media_id,
       filename: file.name,
       status: "processing",
       created_at: new Date().toISOString(),
-      estimated_completion: "5-10 minutes",
+      estimated_completion: uploadConfig.processing_info.estimated_processing_time,
     }
   } catch (error) {
-    console.error('Upload error:', error)
-    throw error
+    console.error('Upload error details:', error)
+    if (error instanceof Error) {
+      throw new Error(`Upload failed: ${error.message}`)
+    }
+    throw new Error('Upload failed: Unknown error')
   }
 }
 

@@ -4,6 +4,7 @@ export * from '../../shared/types/api'
 // Additional types for frontend components
 export interface TranscriptionResponse {
   id: string
+  transcript_id: string  // Add this for backend compatibility
   filename: string
   status: "processing" | "completed" | "failed"
   created_at: string
