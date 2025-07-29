@@ -124,6 +124,7 @@ export function Dashboard() {
   const [currentView, setCurrentView] = useState("dashboard")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [pollingTranscriptIds, setPollingTranscriptIds] = useState<Set<string>>(new Set())
   const { toast } = useToast()
   const { user, signOut } = useAuth()
   const apiClient = useApiClient()
@@ -148,6 +149,74 @@ export function Dashboard() {
   useEffect(() => {
     loadTranscripts()
   }, [])
+
+  // Poll for transcription status
+  useEffect(() => {
+    if (pollingTranscriptIds.size === 0) return
+
+    const pollInterval = setInterval(async () => {
+      for (const transcriptId of pollingTranscriptIds) {
+        try {
+          const status = await apiClient.getTranscriptionStatus(transcriptId)
+          
+          if (status.status === 'completed') {
+            // Fetch full transcript data
+            const fullTranscript = await apiClient.getFullTranscript(transcriptId)
+            
+            // Update content with completed transcript
+            setContents(prev => prev.map(content => 
+              content.id === transcriptId 
+                ? { ...content, transcript: fullTranscript, status: 'completed' }
+                : content
+            ))
+            
+            // Update current content if it's the one we're polling
+            if (currentContent?.id === transcriptId) {
+              setCurrentContent(prev => prev ? { ...prev, transcript: fullTranscript, status: 'completed' } : null)
+            }
+            
+            // Stop polling this transcript
+            setPollingTranscriptIds(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(transcriptId)
+              return newSet
+            })
+            
+            // Show completion notification
+            toast({
+              title: "Transcription Complete!",
+              description: "Your content is now ready for generation.",
+            })
+          } else if (status.status === 'failed') {
+            // Handle transcription failure
+            setContents(prev => prev.map(content => 
+              content.id === transcriptId 
+                ? { ...content, status: 'error' }
+                : content
+            ))
+            
+            // Stop polling this transcript
+            setPollingTranscriptIds(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(transcriptId)
+              return newSet
+            })
+            
+            // Show error notification
+            toast({
+              title: "Transcription Failed",
+              description: "Please contact support if this persists.",
+              variant: "destructive",
+            })
+          }
+        } catch (error) {
+          console.error(`Failed to check transcription status for ${transcriptId}:`, error)
+        }
+      }
+    }, 5000) // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval)
+  }, [pollingTranscriptIds, currentContent?.id, apiClient, toast])
 
   const loadTranscripts = async () => {
     try {
@@ -190,8 +259,9 @@ export function Dashboard() {
   }
 
   const handleUploadSuccess = async (data: TranscriptionResponse) => {
+    const transcriptId = data.transcript_id
     const newContent: ContentSource = {
-      id: Date.now().toString(),
+      id: transcriptId,
       filename: data.filename,
       transcript: undefined, // Transcript will be populated when transcription completes
       uploadedAt: data.created_at,
@@ -201,8 +271,8 @@ export function Dashboard() {
     setCurrentContent(newContent)
     setContents((prev) => [newContent, ...prev])
 
-    // Refresh transcript list to get the latest data
-    loadTranscripts()
+    // Start polling for this transcript
+    setPollingTranscriptIds(prev => new Set(prev).add(transcriptId))
 
     // Immediately go to transcript editor after upload
     setCurrentView("transcript-editor")
@@ -210,7 +280,7 @@ export function Dashboard() {
 
     toast({
       title: "Upload Complete",
-      description: "Your sermon has been uploaded and is being transcribed.",
+      description: "Now transcribing your audio. This usually takes 30-60 seconds.",
     })
   }
 

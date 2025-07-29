@@ -17,7 +17,7 @@ import Image from "next/image"
 import type { ContentSource } from "@/types/api"
 
 interface AppSidebarProps {
-  sermons: ContentSource[]
+  contents: ContentSource[]
   currentView: string
   onViewChange: (view: string) => void
   onContentSelect: (content: ContentSource) => void
@@ -95,7 +95,9 @@ const bottomNavigation = [
 ]
 
 
-export function AppSidebar({ sermons, currentView, onViewChange, onContentSelect }: AppSidebarProps) {
+export function AppSidebar({ contents, currentView, onViewChange, onContentSelect }: AppSidebarProps) {
+  // Count ready transcripts (completed transcription but no content generated yet)
+  const readyCount = contents.filter(c => c.status === 'completed' && (!c.content || c.content.length === 0)).length
   return (
     <Sidebar collapsible="icon" className="border-r border-warm-gray-200 bg-warm-gray-50">
       <SidebarHeader className="border-b border-warm-gray-200 bg-white">
@@ -132,7 +134,12 @@ export function AppSidebar({ sermons, currentView, onViewChange, onContentSelect
                       }`}
                     >
                       <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
-                      <span>{item.title.toUpperCase()}</span>
+                      <span className="flex-1 text-left">{item.title.toUpperCase()}</span>
+                      {item.id === 'library' && readyCount > 0 && (
+                        <span className="ml-auto bg-primary text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[1.5rem] text-center">
+                          {readyCount}
+                        </span>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )

@@ -134,13 +134,18 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
                 </h3>
                 <p className="text-gray-600 font-medium">
                   {uploading
-                    ? "Please wait while we process your file"
+                    ? "Please wait while we transfer your file"
                     : success
-                      ? "Your sermon has been uploaded successfully"
+                      ? "Upload complete! Now transcribing your audio..."
                       : isDragActive
                         ? "Drop your file here"
                         : "Drag and drop your audio, video, PDF, or Word document here, or click to browse"}
                 </p>
+                {success && (
+                  <p className="text-sm text-gray-500 font-medium mt-2">
+                    This usually takes 30-60 seconds
+                  </p>
+                )}
               </div>
 
               {!uploading && !success && (

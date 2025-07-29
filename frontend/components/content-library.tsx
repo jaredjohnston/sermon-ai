@@ -35,7 +35,7 @@ const STATUS_CONFIG = {
   completed: {
     icon: CheckCircle2,
     color: "bg-green-100 text-green-800",
-    label: "Completed",
+    label: "Ready",
   },
   uploading: {
     icon: Clock,
@@ -150,9 +150,12 @@ export function ContentLibrary({
             const statusConfig = STATUS_CONFIG[content.status]
             const StatusIcon = statusConfig.icon
             const hasContent = Boolean(content.content)
+            const isTranscribing = content.status === 'transcribing'
+            const isReady = content.status === 'completed' && !hasContent
+            const isNew = new Date(content.uploadedAt).getTime() > Date.now() - 24 * 60 * 60 * 1000 // Within 24 hours
 
             return (
-              <Card key={content.id} className="hover:shadow-md transition-shadow">
+              <Card key={content.id} className={`hover:shadow-md transition-shadow ${isNew ? 'ring-2 ring-primary/50' : ''}`}>
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center flex-1 min-w-0">
@@ -164,9 +167,14 @@ export function ContentLibrary({
                             <span>{formatDate(content.uploadedAt)}</span>
                           </div>
                           <Badge className={statusConfig.color}>
-                            <StatusIcon className="h-3 w-3 mr-1" />
-                            {statusConfig.label}
+                            <StatusIcon className={`h-3 w-3 mr-1 ${isTranscribing ? 'animate-spin' : ''}`} />
+                            {isTranscribing ? 'Transcribing...' : isReady ? 'Ready' : statusConfig.label}
                           </Badge>
+                          {isNew && (
+                            <Badge className="bg-blue-100 text-blue-800">
+                              <span className="font-semibold">NEW</span>
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -178,9 +186,10 @@ export function ContentLibrary({
                         size="sm"
                         onClick={() => onTranscriptEdit(content)}
                         className="whitespace-nowrap"
+                        disabled={isTranscribing}
                       >
                         <Edit3 className="h-4 w-4 mr-2" />
-                        Edit Transcript
+                        {isTranscribing ? 'Transcribing...' : 'Edit Transcript'}
                       </Button>
 
                       {hasContent ? (
@@ -193,9 +202,15 @@ export function ContentLibrary({
                           Review Content
                         </Button>
                       ) : (
-                        <Button variant="outline" size="sm" disabled className="whitespace-nowrap bg-transparent">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          disabled={isTranscribing}
+                          className="whitespace-nowrap bg-transparent"
+                          onClick={() => !isTranscribing && onTranscriptEdit(content)}
+                        >
                           <Sparkles className="h-4 w-4 mr-2" />
-                          No Content Yet
+                          {isTranscribing ? 'Transcribing...' : 'Generate Content'}
                         </Button>
                       )}
 
