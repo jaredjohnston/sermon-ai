@@ -18,13 +18,13 @@ import { GeneratedContent } from "./generated-content"
 import { DashboardContent } from "./dashboard-content"
 import { ContentLibrary } from "./content-library"
 import { AIAssistant } from "./ai-assistant"
-import { TranscriptViewer } from "./transcript-viewer"
+import { ContentViewer } from "./content-viewer"
 import { VideoClips } from "./video-clips"
 import { TemplatesList } from "./templates-list"
-import type { ContentSource, ProcessingStage, TranscriptionResponse, ContentResponse, GeneratedContentModel } from "@/types/api"
+import type { ContentSource, ProcessingStage, TranscriptionResponse, ContentGenerationResponse, GeneratedContentModel } from "@/types/api"
 import { useToast } from "@/hooks/use-toast"
 import { useApiClient } from "@/lib/api-client"
-import { transformTranscriptListToContentSources, needsTranscriptData } from "@/lib/data-transformers"
+import { transformTranscriptListToContentSources, needsTranscriptData, transformContentGenerationResponse } from "@/lib/data-transformers"
 
 // Sample sermon data for testing
 const SAMPLE_SERMONS: ContentSource[] = [
@@ -275,39 +275,38 @@ export function Dashboard() {
 
   // Transcript editing removed - transcripts are 99% accurate from Deepgram
 
-  const handleContentGenerated = (contentId: string, contentResponse: ContentResponse) => {
-    const generatedContent: GeneratedContentModel = {
-      id: contentResponse.id,
-      client_id: "client-1", // This would come from user context
-      transcript_id: contentId,
-      template_id: contentResponse.metadata.template_id,
-      content: contentResponse.content,
-      content_metadata: { template_name: contentResponse.metadata.template_name },
-      generation_settings: { model: contentResponse.metadata.model_used },
-      generation_cost_cents: contentResponse.metadata.generation_cost_cents,
-      generation_duration_ms: contentResponse.metadata.generation_duration_ms,
-      user_edits_count: 0,
-      created_at: new Date().toISOString(),
-      created_by: "user-1", // This would come from user context
-      updated_at: new Date().toISOString(),
-      updated_by: "user-1", // This would come from user context
-    }
-    
-    setContents((prev) =>
-      prev.map((content) => 
-        content.id === contentId 
-          ? { ...content, content: [...(content.content || []), generatedContent], status: "completed" }
-          : content
-      ),
-    )
-    if (currentContent?.id === contentId) {
-      setCurrentContent({ 
-        ...currentContent, 
-        content: [...(currentContent.content || []), generatedContent], 
-        status: "completed" 
+  const handleContentGenerated = async (contentId: string, contentResponse: ContentGenerationResponse) => {
+    try {
+      // Fetch the generated content details to get full data
+      const generatedContent = await apiClient.getGeneratedContent(contentResponse.id)
+      
+      // Update the contents state with the new generated content
+      setContents((prev) =>
+        prev.map((content) => 
+          content.id === contentId 
+            ? { ...content, content: [...(content.content || []), generatedContent], status: "completed" }
+            : content
+        ),
+      )
+      
+      // Update current content if it's the one being generated
+      if (currentContent?.id === contentId) {
+        setCurrentContent({ 
+          ...currentContent, 
+          content: [...(currentContent.content || []), generatedContent], 
+          status: "completed" 
+        })
+        // Navigate to content view after successful generation
+        setCurrentView("content")
+        setCurrentStage("completed")
+      }
+    } catch (error) {
+      console.error('Failed to fetch generated content details:', error)
+      toast({
+        title: "Error loading generated content",
+        description: "Content was generated but failed to load details",
+        variant: "destructive",
       })
-      setCurrentView("content")
-      setCurrentStage("completed")
     }
   }
 
@@ -364,7 +363,7 @@ export function Dashboard() {
       case "transcript-editor":
         if (currentContent) {
           return (
-            <TranscriptViewer
+            <ContentViewer
               content={currentContent}
               onContentGenerated={handleContentGenerated}
               onBack={() => setCurrentView("library")}

@@ -23,15 +23,16 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useApiClient } from "@/lib/api-client"
-import type { ContentSource, ContentResponse, ContentTemplatePublic } from "@/types/api"
+import { transformContentGenerationResponse } from "@/lib/data-transformers"
+import type { ContentSource, ContentResponse, ContentTemplatePublic, ContentGenerationRequest } from "@/types/api"
 
-interface TranscriptViewerProps {
+interface ContentViewerProps {
   content: ContentSource
   onContentGenerated: (contentId: string, contentResponse: ContentResponse) => void
   onBack: () => void
 }
 
-export function TranscriptViewer({ content, onContentGenerated, onBack }: TranscriptViewerProps) {
+export function ContentViewer({ content, onContentGenerated, onBack }: ContentViewerProps) {
   const transcriptText = content.transcript?.content?.full_transcript || ""
   const apiClient = useApiClient()
   const { toast } = useToast()
@@ -91,33 +92,69 @@ export function TranscriptViewer({ content, onContentGenerated, onBack }: Transc
     setError(null)
 
     try {
+      // Validate we have transcript ID
+      const transcriptId = content.id // ContentSource.id is the transcript_id
+      if (!transcriptId) {
+        throw new Error("No transcript ID available")
+      }
+
+      let successCount = 0
+      const errors: string[] = []
+
       // Generate content for each selected template
       for (const templateId of selectedTemplates) {
         const template = templates.find(t => t.id === templateId)
         if (!template) continue
 
-        // TODO: Call the actual content generation API
-        // For now, we need to update the API to support template-based generation
         toast({
           title: "Generating content",
           description: `Creating ${template.name}...`,
         })
 
-        // Placeholder for actual API call
-        // const response = await apiClient.generateContent(
-        //   sermon.transcript?.transcript_id || '',
-        //   templateId,
-        //   customInstructions
-        // )
-        // onContentGenerated(sermon.id, response)
+        try {
+          // Prepare the request
+          const request: ContentGenerationRequest = {
+            transcript_id: transcriptId,
+            template_id: templateId,
+            custom_instructions: customInstructions || undefined
+          }
+
+          // Call the API
+          const response = await apiClient.generateContent(request)
+          
+          // Transform the response to match frontend expectations
+          const transformedContent = transformContentGenerationResponse(
+            response,
+            transcriptId,
+            templateId,
+            template.name
+          )
+          
+          // Notify parent component
+          onContentGenerated(content.id, response)
+          successCount++
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          errors.push(`${template.name}: ${errorMessage}`)
+          console.error(`Failed to generate content for template ${template.name}:`, error)
+        }
       }
 
-      toast({
-        title: "Content generated successfully",
-        description: "Your content has been created from the selected templates",
-      })
-      
-      // TODO: Navigate to content view after generation
+      // Show results
+      if (successCount > 0 && errors.length === 0) {
+        toast({
+          title: "Content generated successfully",
+          description: `Created ${successCount} content piece${successCount > 1 ? 's' : ''}`,
+        })
+      } else if (successCount > 0 && errors.length > 0) {
+        toast({
+          title: "Partial success",
+          description: `Generated ${successCount} of ${selectedTemplates.size} templates. Some failed.`,
+          variant: "default",
+        })
+      } else if (errors.length > 0) {
+        throw new Error(errors.join('; '))
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Content generation failed"
       setError(errorMessage)

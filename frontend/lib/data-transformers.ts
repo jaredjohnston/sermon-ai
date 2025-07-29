@@ -8,7 +8,8 @@ import type {
   FullTranscriptResponse, 
   GeneratedContentModel,
   ContentSource,
-  ProcessingStage 
+  ProcessingStage,
+  ContentGenerationResponse 
 } from '@/types/api'
 
 /**
@@ -104,4 +105,38 @@ export function needsTranscriptData(contentSource: ContentSource): boolean {
     contentSource.status === 'completed' && 
     !contentSource.transcript?.content?.full_transcript
   )
+}
+
+/**
+ * Transform backend ContentGenerationResponse to GeneratedContentModel
+ */
+export function transformContentGenerationResponse(
+  response: ContentGenerationResponse,
+  transcriptId: string,
+  templateId: string,
+  templateName: string
+): GeneratedContentModel {
+  return {
+    id: response.id,
+    client_id: '', // This would be set by the backend
+    transcript_id: transcriptId,
+    template_id: templateId,
+    content: response.content,
+    content_metadata: {
+      ...response.metadata,
+      template_name: templateName
+    },
+    generation_settings: {
+      // Backend will populate actual settings
+      model: response.metadata?.model_used || 'gpt-4o',
+      temperature: response.metadata?.temperature || 0.7
+    },
+    generation_cost_cents: response.generation_cost_cents,
+    generation_duration_ms: response.generation_duration_ms,
+    user_edits_count: 0,
+    created_at: new Date().toISOString(),
+    created_by: '', // This would be set by the backend
+    updated_at: new Date().toISOString(),
+    updated_by: '' // This would be set by the backend
+  }
 }
