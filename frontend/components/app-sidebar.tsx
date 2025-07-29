@@ -14,13 +14,13 @@ import {
 } from "@/components/ui/sidebar"
 import { Settings, HelpCircle, User, LogOut, Clock, Zap, Video, Mic, Sparkles, BookOpen } from "lucide-react"
 import Image from "next/image"
-import type { SermonData } from "@/types/api"
+import type { ContentSource } from "@/types/api"
 
 interface AppSidebarProps {
-  sermons: SermonData[]
+  sermons: ContentSource[]
   currentView: string
   onViewChange: (view: string) => void
-  onSermonSelect: (sermon: SermonData) => void
+  onSermonSelect: (sermon: ContentSource) => void
 }
 
 // Traditional Upload Icon - Simple upward arrow with base line

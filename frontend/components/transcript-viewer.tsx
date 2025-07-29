@@ -23,10 +23,10 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useApiClient } from "@/lib/api-client"
-import type { SermonData, ContentResponse, ContentTemplatePublic } from "@/types/api"
+import type { ContentSource, ContentResponse, ContentTemplatePublic } from "@/types/api"
 
 interface TranscriptViewerProps {
-  sermon: SermonData
+  sermon: ContentSource
   onContentGenerated: (sermonId: string, contentResponse: ContentResponse) => void
   onBack: () => void
 }

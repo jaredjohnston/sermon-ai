@@ -5,16 +5,16 @@ import { Button } from "@/components/ui/button"
 import { Upload, Sparkles, BookOpen, Zap, Video, Edit3 } from "lucide-react"
 import { UploadZone } from "./upload-zone"
 import Image from "next/image"
-import type { SermonData, TranscriptionResponse } from "@/types/api"
+import type { ContentSource, TranscriptionResponse } from "@/types/api"
 
 interface DashboardContentProps {
-  sermons: SermonData[]
+  sermons: ContentSource[]
   onViewChange: (view: string) => void
   onUploadStart: () => void
   onUploadSuccess: (data: TranscriptionResponse) => void
   onUploadError: (error: string) => void
-  onTranscriptEdit: (sermon: SermonData) => void
-  onContentEdit: (sermon: SermonData) => void
+  onTranscriptEdit: (sermon: ContentSource) => void
+  onContentEdit: (sermon: ContentSource) => void
 }
 
 

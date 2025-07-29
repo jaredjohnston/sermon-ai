@@ -274,11 +274,12 @@ export interface ApiError {
 // Frontend State Types
 export type ProcessingStage = "idle" | "uploading" | "transcribing" | "generating" | "completed" | "error";
 
-export interface SermonData {
+export interface ContentSource {
   id: string;
   filename: string;
   transcript?: FullTranscriptResponse;
   content?: GeneratedContentModel[];
   uploadedAt: string;
   status: ProcessingStage;
+  sourceType?: 'audio' | 'video' | 'pdf' | 'docx' | 'text'; // Future extension for documents
 }

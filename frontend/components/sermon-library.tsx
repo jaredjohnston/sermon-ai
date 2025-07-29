@@ -21,14 +21,14 @@ import {
   Edit3,
   Sparkles,
 } from "lucide-react"
-import type { SermonData } from "@/types/api"
+import type { ContentSource } from "@/types/api"
 
 interface SermonLibraryProps {
-  sermons: SermonData[]
-  onSermonSelect: (sermon: SermonData) => void
+  sermons: ContentSource[]
+  onSermonSelect: (sermon: ContentSource) => void
   onSermonDelete: (sermonId: string) => void
-  onTranscriptEdit: (sermon: SermonData) => void
-  onContentEdit: (sermon: SermonData) => void
+  onTranscriptEdit: (sermon: ContentSource) => void
+  onContentEdit: (sermon: ContentSource) => void
 }
 
 const STATUS_CONFIG = {

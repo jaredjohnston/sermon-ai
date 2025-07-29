@@ -21,11 +21,13 @@ import { AIAssistant } from "./ai-assistant"
 import { TranscriptViewer } from "./transcript-viewer"
 import { VideoClips } from "./video-clips"
 import { TemplatesList } from "./templates-list"
-import type { SermonData, ProcessingStage, TranscriptionResponse, ContentResponse, GeneratedContentModel } from "@/types/api"
+import type { ContentSource, ProcessingStage, TranscriptionResponse, ContentResponse, GeneratedContentModel } from "@/types/api"
 import { useToast } from "@/hooks/use-toast"
+import { useApiClient } from "@/lib/api-client"
+import { transformTranscriptListToContentSources, needsTranscriptData } from "@/lib/data-transformers"
 
 // Sample sermon data for testing
-const SAMPLE_SERMONS: SermonData[] = [
+const SAMPLE_SERMONS: ContentSource[] = [
   {
     id: "sample-1",
     filename: "The Good Shepherd - John 10.mp3",
@@ -116,13 +118,15 @@ Let us pray together...`,
 ]
 
 export function Dashboard() {
-  const [sermons, setSermons] = useState<SermonData[]>([])
+  const [sermons, setSermons] = useState<ContentSource[]>([])
   const [currentStage, setCurrentStage] = useState<ProcessingStage>("idle")
-  const [currentSermon, setCurrentSermon] = useState<SermonData | null>(null)
+  const [currentSermon, setCurrentSermon] = useState<ContentSource | null>(null)
   const [currentView, setCurrentView] = useState("dashboard")
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const { toast } = useToast()
   const { user, signOut } = useAuth()
+  const apiClient = useApiClient()
 
   const handleSignOut = async () => {
     try {
@@ -140,23 +144,45 @@ export function Dashboard() {
     }
   }
 
-  // Load sermons from localStorage on mount
+  // Load transcripts from API on mount
   useEffect(() => {
-    const savedSermons = localStorage.getItem("sermon-history")
-    if (savedSermons) {
-      const parsedSermons = JSON.parse(savedSermons)
-      setSermons(parsedSermons)
-    } else {
-      // If no saved sermons, use sample data
-      setSermons(SAMPLE_SERMONS)
-      localStorage.setItem("sermon-history", JSON.stringify(SAMPLE_SERMONS))
-    }
+    loadTranscripts()
   }, [])
 
-  // Save sermons to localStorage whenever sermons change
-  useEffect(() => {
-    localStorage.setItem("sermon-history", JSON.stringify(sermons))
-  }, [sermons])
+  const loadTranscripts = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // Fetch transcripts from API
+      const response = await apiClient.listTranscripts(50, 0, 'completed')
+      
+      // Transform backend data to frontend format
+      const contentSources = transformTranscriptListToContentSources(response.transcripts)
+      
+      setSermons(contentSources)
+      
+      // If no transcripts found, show sample data temporarily
+      if (contentSources.length === 0) {
+        setSermons(SAMPLE_SERMONS)
+      }
+      
+    } catch (error) {
+      console.error('Failed to load transcripts:', error)
+      setError(error instanceof Error ? error.message : 'Failed to load transcripts')
+      
+      // Fallback to sample data on error
+      setSermons(SAMPLE_SERMONS)
+      
+      toast({
+        title: "Failed to load transcripts",
+        description: "Using sample data. Check your connection and try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleUploadStart = () => {
     setCurrentStage("uploading")
@@ -164,7 +190,7 @@ export function Dashboard() {
   }
 
   const handleUploadSuccess = async (data: TranscriptionResponse) => {
-    const newSermon: SermonData = {
+    const newSermon: ContentSource = {
       id: Date.now().toString(),
       filename: data.filename,
       transcript: undefined, // Transcript will be populated when transcription completes
@@ -175,13 +201,16 @@ export function Dashboard() {
     setCurrentSermon(newSermon)
     setSermons((prev) => [newSermon, ...prev])
 
+    // Refresh transcript list to get the latest data
+    loadTranscripts()
+
     // Immediately go to transcript editor after upload
     setCurrentView("transcript-editor")
     setCurrentStage("idle")
 
     toast({
       title: "Upload Complete",
-      description: "Your sermon has been uploaded. You can now edit the transcript.",
+      description: "Your sermon has been uploaded and is being transcribed.",
     })
   }
 
@@ -195,6 +224,11 @@ export function Dashboard() {
     setCurrentSermon(null)
     setError(null)
     setCurrentView("dashboard")
+    
+    // Also retry loading transcripts if there was an API error
+    if (error && error.includes('Failed to load transcripts')) {
+      loadTranscripts()
+    }
   }
 
   const handleViewChange = (view: string) => {
@@ -206,7 +240,7 @@ export function Dashboard() {
     }
   }
 
-  const handleSermonSelect = (sermon: SermonData) => {
+  const handleSermonSelect = (sermon: ContentSource) => {
     setCurrentSermon(sermon)
     if (sermon.content) {
       setCurrentView("content")
@@ -229,12 +263,12 @@ export function Dashboard() {
     })
   }
 
-  const handleTranscriptEdit = (sermon: SermonData) => {
+  const handleTranscriptEdit = (sermon: ContentSource) => {
     setCurrentSermon(sermon)
     setCurrentView("transcript-editor")
   }
 
-  const handleContentEdit = (sermon: SermonData) => {
+  const handleContentEdit = (sermon: ContentSource) => {
     setCurrentSermon(sermon)
     setCurrentView("content")
   }
@@ -278,6 +312,18 @@ export function Dashboard() {
   }
 
   const renderContent = () => {
+    // Show loading state while fetching initial transcript data
+    if (loading && currentView === "dashboard") {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-warm-gray-900 mx-auto mb-4"></div>
+            <p className="text-warm-gray-600">Loading your content...</p>
+          </div>
+        </div>
+      )
+    }
+
     // Show processing status if currently processing
     if (["uploading", "transcribing", "generating", "error"].includes(currentStage)) {
       return (
