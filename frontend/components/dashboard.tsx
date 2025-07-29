@@ -18,8 +18,9 @@ import { GeneratedContent } from "./generated-content"
 import { DashboardContent } from "./dashboard-content"
 import { SermonLibrary } from "./sermon-library"
 import { AIAssistant } from "./ai-assistant"
-import { TranscriptEditor } from "./transcript-editor"
+import { TranscriptViewer } from "./transcript-viewer"
 import { VideoClips } from "./video-clips"
+import { TemplatesList } from "./templates-list"
 import type { SermonData, ProcessingStage, TranscriptionResponse, ContentResponse, GeneratedContentModel } from "@/types/api"
 import { useToast } from "@/hooks/use-toast"
 
@@ -317,7 +318,7 @@ export function Dashboard() {
       case "transcript-editor":
         if (currentSermon) {
           return (
-            <TranscriptEditor
+            <TranscriptViewer
               sermon={currentSermon}
               onContentGenerated={handleContentGenerated}
               onBack={() => setCurrentView("library")}
@@ -331,6 +332,9 @@ export function Dashboard() {
 
       case "video-clips":
         return <VideoClips />
+
+      case "voice-style":
+        return <TemplatesList />
 
       case "settings":
         return (

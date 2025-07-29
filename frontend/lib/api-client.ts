@@ -11,7 +11,11 @@ import {
   GeneratedContentModel,
   MediaItem,
   User,
-  ApiError
+  ApiError,
+  CreateTemplateRequest,
+  UpdateTemplateRequest,
+  PatternExtractionResponse,
+  TemplateExtractionRequest
 } from '@/types/api';
 import { createClient } from '@/lib/supabase/client';
 
@@ -53,22 +57,54 @@ class ApiClient {
     };
 
     try {
+      console.log(`Making request to: ${url}`, { method: config.method, body: config.body });
       const response = await fetch(url, config);
+      
+      console.log(`Response status: ${response.status} ${response.statusText}`);
+      console.log(`Response headers:`, Object.fromEntries(response.headers.entries()));
       
       // Handle non-JSON responses (like file uploads)
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
+        console.log('Non-JSON response detected');
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         return response as unknown as T;
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log(`Raw response text:`, responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log(`Parsed response data:`, data);
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', parseError);
+        throw new Error(`Invalid JSON response: ${responseText}`);
+      }
 
       if (!response.ok) {
+        console.error(`API Error ${response.status}:`, data);
+        
+        // Handle FastAPI validation errors (422)
+        let errorMessage = 'Unknown error';
+        if (response.status === 422 && data.detail) {
+          if (Array.isArray(data.detail)) {
+            // Pydantic validation errors are arrays
+            errorMessage = data.detail.map((err: any) => `${err.loc?.join('.')}: ${err.msg}`).join(', ');
+          } else {
+            errorMessage = data.detail;
+          }
+        } else if (data.detail) {
+          errorMessage = data.detail;
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+        
         const error: ApiError = {
-          detail: data.detail || data.message || 'Unknown error',
+          detail: errorMessage,
           status_code: response.status
         };
         throw error;
@@ -148,6 +184,26 @@ class ApiClient {
     return this.request(ENDPOINTS.content.templates.get(templateId));
   }
 
+  async createContentTemplate(data: CreateTemplateRequest): Promise<ContentTemplatePublic> {
+    return this.request(ENDPOINTS.content.templates.create, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateContentTemplate(templateId: string, data: UpdateTemplateRequest): Promise<ContentTemplatePublic> {
+    return this.request(ENDPOINTS.content.templates.update(templateId), {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteContentTemplate(templateId: string): Promise<void> {
+    return this.request(ENDPOINTS.content.templates.delete(templateId), {
+      method: 'DELETE',
+    });
+  }
+
   async generateContent(request: ContentGenerationRequest): Promise<ContentGenerationResponse> {
     return this.request(ENDPOINTS.content.generation.generate, {
       method: 'POST',
@@ -163,15 +219,40 @@ class ApiClient {
     return this.request(ENDPOINTS.content.generation.list(transcriptId));
   }
 
+  // Pattern extraction methods
+  async extractTemplatePatterns(data: TemplateExtractionRequest): Promise<PatternExtractionResponse> {
+    return this.request(ENDPOINTS.content.patterns.extract, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Template extraction for onboarding
-  async extractAndCreateTemplate(data: {
-    content_type_name: string;
-    examples: string[];
-    description?: string;
-  }): Promise<ContentTemplatePublic> {
+  async extractAndCreateTemplate(data: TemplateExtractionRequest): Promise<ContentTemplatePublic> {
     return this.request(ENDPOINTS.content.onboarding.extractAndCreateTemplate, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  // Template CRUD operations
+  async createTemplate(data: CreateTemplateRequest): Promise<ContentTemplatePublic> {
+    return this.request(ENDPOINTS.content.templates.create, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTemplate(id: string, data: UpdateTemplateRequest): Promise<ContentTemplatePublic> {
+    return this.request(ENDPOINTS.content.templates.update(id), {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    return this.request(ENDPOINTS.content.templates.delete(id), {
+      method: 'DELETE',
     });
   }
 

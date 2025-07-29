@@ -15,6 +15,32 @@ export async function middleware(request: NextRequest) {
   const publicRoutes = ['/login', '/signup', '/auth']
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
 
+  // Special handling for /test route - only for specific authenticated users
+  if (pathname === '/test') {
+    if (!user?.email_confirmed_at) {
+      // Not authenticated - redirect to login
+      url.pathname = '/login'
+      return Response.redirect(url)
+    }
+    
+    // Add email-based restriction here
+    // You can customize this list with your email(s)
+    const allowedTestEmails = [
+      'jaredjohnston000+118@gmail.com'
+      // For now, we'll allow any authenticated user in development
+    ]
+    
+    // If allowedTestEmails is empty, allow any authenticated user
+    // Otherwise, check if user's email is in the allowed list
+    if (allowedTestEmails.length > 0 && !allowedTestEmails.includes(user.email || '')) {
+      url.pathname = '/dashboard'
+      return Response.redirect(url)
+    }
+    
+    // User is authenticated and allowed - let them through
+    return response
+  }
+
   // Root path handling
   if (pathname === '/') {
     if (user?.email_confirmed_at) {

@@ -7,6 +7,43 @@ export interface TemplateExtractionRequest {
   description?: string; // Optional description
 }
 
+export interface PatternExtractionResponse {
+  structured_prompt: string;
+  confidence_score: number;
+  analysis: {
+    style_patterns: string[];
+    structure_patterns: string[];
+    tone_analysis: string;
+  };
+}
+
+export interface CreateTemplateRequest {
+  name: string;
+  content_type_name: string;
+  structured_prompt: string;
+  example_content?: string[];
+  description?: string;
+  model_settings?: {
+    temperature: number;
+    max_tokens: number;
+    model: string;
+  };
+}
+
+export interface UpdateTemplateRequest {
+  name?: string;
+  content_type_name?: string;
+  structured_prompt?: string;
+  example_content?: string[];
+  description?: string;
+  status?: "active" | "draft" | "archived";
+  model_settings?: {
+    temperature: number;
+    max_tokens: number;
+    model: string;
+  };
+}
+
 export interface ContentTemplatePublic {
   id: string;
   client_id: string;
@@ -27,6 +64,7 @@ export interface ContentTemplatePublic {
   updated_by: string;
   deleted_at?: string;
   deleted_by?: string;
+  creator_name?: string;  // Full name from user profile
 }
 
 export interface ContentGenerationRequest {
