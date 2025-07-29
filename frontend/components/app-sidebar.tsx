@@ -20,7 +20,7 @@ interface AppSidebarProps {
   sermons: ContentSource[]
   currentView: string
   onViewChange: (view: string) => void
-  onSermonSelect: (sermon: ContentSource) => void
+  onContentSelect: (content: ContentSource) => void
 }
 
 // Traditional Upload Icon - Simple upward arrow with base line
@@ -95,7 +95,7 @@ const bottomNavigation = [
 ]
 
 
-export function AppSidebar({ sermons, currentView, onViewChange, onSermonSelect }: AppSidebarProps) {
+export function AppSidebar({ sermons, currentView, onViewChange, onContentSelect }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="border-r border-warm-gray-200 bg-warm-gray-50">
       <SidebarHeader className="border-b border-warm-gray-200 bg-white">

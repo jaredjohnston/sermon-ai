@@ -13,8 +13,8 @@ interface DashboardContentProps {
   onUploadStart: () => void
   onUploadSuccess: (data: TranscriptionResponse) => void
   onUploadError: (error: string) => void
-  onTranscriptEdit: (sermon: ContentSource) => void
-  onContentEdit: (sermon: ContentSource) => void
+  onTranscriptEdit: (content: ContentSource) => void
+  onContentEdit: (content: ContentSource) => void
 }
 
 

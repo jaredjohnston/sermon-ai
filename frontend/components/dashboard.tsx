@@ -240,9 +240,9 @@ export function Dashboard() {
     }
   }
 
-  const handleSermonSelect = (sermon: ContentSource) => {
-    setCurrentSermon(sermon)
-    if (sermon.content) {
+  const handleContentSelect = (content: ContentSource) => {
+    setCurrentSermon(content)
+    if (content.content) {
       setCurrentView("content")
       setCurrentStage("completed")
     } else {
@@ -250,16 +250,16 @@ export function Dashboard() {
     }
   }
 
-  const handleSermonDelete = (sermonId: string) => {
-    setSermons((prev) => prev.filter((s) => s.id !== sermonId))
-    if (currentSermon?.id === sermonId) {
+  const handleContentDelete = (contentId: string) => {
+    setSermons((prev) => prev.filter((s) => s.id !== contentId))
+    if (currentSermon?.id === contentId) {
       setCurrentSermon(null)
       setCurrentStage("idle")
       setCurrentView("dashboard")
     }
     toast({
-      title: "Sermon Deleted",
-      description: "The sermon has been removed from your library.",
+      title: "Content Deleted",
+      description: "The content has been removed from your library.",
     })
   }
 
@@ -354,8 +354,8 @@ export function Dashboard() {
         return (
           <SermonLibrary
             sermons={sermons}
-            onSermonSelect={handleSermonSelect}
-            onSermonDelete={handleSermonDelete}
+            onContentSelect={handleContentSelect}
+            onContentDelete={handleContentDelete}
             onTranscriptEdit={handleTranscriptEdit}
             onContentEdit={handleContentEdit}
           />
@@ -450,7 +450,7 @@ export function Dashboard() {
         sermons={sermons}
         currentView={currentView}
         onViewChange={handleViewChange}
-        onSermonSelect={handleSermonSelect}
+        onContentSelect={handleContentSelect}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-warm-gray-200 bg-white px-4">

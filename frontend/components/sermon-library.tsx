@@ -25,10 +25,10 @@ import type { ContentSource } from "@/types/api"
 
 interface SermonLibraryProps {
   sermons: ContentSource[]
-  onSermonSelect: (sermon: ContentSource) => void
-  onSermonDelete: (sermonId: string) => void
-  onTranscriptEdit: (sermon: ContentSource) => void
-  onContentEdit: (sermon: ContentSource) => void
+  onContentSelect: (content: ContentSource) => void
+  onContentDelete: (contentId: string) => void
+  onTranscriptEdit: (content: ContentSource) => void
+  onContentEdit: (content: ContentSource) => void
 }
 
 const STATUS_CONFIG = {
@@ -66,8 +66,8 @@ const STATUS_CONFIG = {
 
 export function SermonLibrary({
   sermons,
-  onSermonSelect,
-  onSermonDelete,
+  onContentSelect,
+  onContentDelete,
   onTranscriptEdit,
   onContentEdit,
 }: SermonLibraryProps) {
@@ -206,7 +206,7 @@ export function SermonLibrary({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onSermonSelect(sermon)}>
+                          <DropdownMenuItem onClick={() => onContentSelect(sermon)}>
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
@@ -216,7 +216,7 @@ export function SermonLibrary({
                               Export Content
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem onClick={() => onSermonDelete(sermon.id)} className="text-red-600">
+                          <DropdownMenuItem onClick={() => onContentDelete(sermon.id)} className="text-red-600">
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
