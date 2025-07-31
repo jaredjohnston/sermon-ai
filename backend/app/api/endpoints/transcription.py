@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from pathlib import Path
 from fastapi import APIRouter, File, UploadFile, HTTPException, status, Request, Depends
 from app.config.settings import settings
@@ -19,6 +20,12 @@ import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+def generate_unique_filename(original_filename: str) -> str:
+    """Generate a unique filename by adding timestamp before the extension"""
+    name, ext = os.path.splitext(original_filename)
+    timestamp = int(datetime.now(UTC).timestamp())
+    return f"{name}_{timestamp}{ext}"
 
 async def _schedule_post_webhook_cleanup(transcript, transcription_status: str):
     """
@@ -209,7 +216,8 @@ async def prepare_upload(
         logger.info(f"File category detected: {file_category.value}, Processing type: {processing_requirements['processing_type']}")
         
         # 3. STORAGE PATH GENERATION WITH USER CONTEXT
-        storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/uploads/{request.filename}"
+        unique_filename = generate_unique_filename(request.filename)
+        storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/uploads/{unique_filename}"
         
         # 4. DATABASE PREPARATION - Create media record in "preparing" state
         logger.info(f"Creating media record for {request.filename}")
@@ -362,8 +370,9 @@ async def transcribe_upload(
             # STEP 2: Create database records
             logger.info(f"Creating video record for {file.filename} ({file_size_mb}MB)")
             
-            # Create storage path using settings prefix
-            storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/uploads/{file.filename}"
+            # Create storage path using settings prefix with unique filename
+            unique_filename = generate_unique_filename(file.filename)
+            storage_path = f"{settings.STORAGE_PATH_PREFIX}/{client.id}/uploads/{unique_filename}"
             
             # Create media record first
             # Combine validation results with processing information
@@ -599,6 +608,74 @@ async def get_transcription_status(
             detail="Failed to get transcription status"
         )
 
+@router.get("/media/{media_id}/transcript")
+async def get_transcript_by_media_id(
+    media_id: str,
+    auth: AuthContext = Depends(get_auth_context)
+):
+    """Get transcript information for a given media ID"""
+    try:
+        from uuid import UUID
+        media_uuid = UUID(media_id)
+        
+        # Get user's client for authorization
+        client = await supabase_service.get_user_client(auth.user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to access transcripts"
+            )
+        
+        # Get media record first to verify ownership
+        media = await supabase_service.get_media(media_uuid, auth.access_token)
+        if not media:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Media not found"
+            )
+        
+        # Check authorization - user can only access their client's media
+        if media.client_id != client.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: media belongs to different organization"
+            )
+        
+        # Get transcript for this media
+        transcript = await supabase_service.get_video_transcript(media_uuid, auth.access_token)
+        if not transcript:
+            # Media exists but transcript not created yet
+            return {
+                "media_id": str(media.id),
+                "transcript_id": None,
+                "status": "pending",
+                "message": "Transcript not created yet - upload may still be processing"
+            }
+        
+        # Return transcript info
+        return {
+            "media_id": str(media.id),
+            "transcript_id": str(transcript.id),
+            "status": transcript.status,
+            "created_at": transcript.created_at.isoformat(),
+            "updated_at": transcript.updated_at.isoformat(),
+            "error_message": transcript.error_message
+        }
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid media ID format"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting transcript by media ID: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get transcript information"
+        )
+
 @router.get("/")
 async def list_transcripts(
     auth: AuthContext = Depends(get_auth_context),
@@ -637,18 +714,23 @@ async def list_transcripts(
             )
         
         # For now, get all user transcripts (we'll add pagination to service layer later)
+        logger.info(f"🔍 Getting transcripts for user {auth.user.id} in client {client.id}")
         user_transcripts = await supabase_service.get_user_transcripts(auth.user.id, auth.access_token)
+        logger.info(f"📋 Found {len(user_transcripts)} user transcripts")
         
         # Filter by client (extra security layer)
         client_transcripts = [t for t in user_transcripts if t.client_id == client.id]
+        logger.info(f"🏢 After client filtering: {len(client_transcripts)} transcripts")
         
         # Apply status filter if provided
         if status_filter:
             client_transcripts = [t for t in client_transcripts if t.status == status_filter]
+            logger.info(f"🔍 After status filter '{status_filter}': {len(client_transcripts)} transcripts")
         
         # Apply pagination
         total_count = len(client_transcripts)
         paginated_transcripts = client_transcripts[offset:offset + limit]
+        logger.info(f"📄 Returning {len(paginated_transcripts)} transcripts (total: {total_count})")
         
         # Format response
         transcripts_data = []
@@ -911,7 +993,7 @@ async def handle_upload_complete(request: Request):
                 
             # Extract media details from record
             media_id = str(record.get("id"))
-            user_id = str(record.get("created_by"))
+            user_id = str(record.get("user_id"))  # Use user_id field instead of created_by
             client_id = str(record.get("client_id"))
             filename = record.get("filename")
             media_metadata = record.get("metadata", {})
@@ -922,7 +1004,13 @@ async def handle_upload_complete(request: Request):
             logger.info(f"📋 Processing upload completion for {file_category} file")
             logger.info(f"   Media ID: {media_id}")
             logger.info(f"   Client ID: {client_id}")
-            logger.info(f"   User ID: {user_id}")
+            logger.info(f"   User ID from media record: {user_id}")
+            logger.info(f"🔍 DEBUG: Raw media record: {record}")
+            
+            # Check if we got the system user ID
+            if user_id == "00000000-0000-0000-0000-000000000000":
+                logger.error(f"❌ PROBLEM: Media record has system user ID instead of real user ID!")
+                logger.error(f"   This will cause transcript to be created with wrong user_id")
             logger.info(f"   Processing type: {processing_type}")
             
         else:
@@ -947,18 +1035,18 @@ async def handle_upload_complete(request: Request):
                 raise HTTPException(status_code=400, detail="Invalid storage path format")
             
             client_id = path_parts[1]  # Extract client_id from path
-            filename = path_parts[-1]  # Extract filename
+            filename = path_parts[-1]  # Extract filename for logging
+            storage_path = object_name   # Use full storage path for lookup
             
-            # Find media record by filename and client_id
+            # Find media record by storage_path (more reliable than filename)
             try:
-                media_records = await supabase_service.get_media_by_filename_and_client(
-                    filename=filename,
-                    client_id=client_id,
+                media_records = await supabase_service.get_media_by_storage_path(
+                    storage_path=storage_path,
                     access_token=settings.SUPABASE_SERVICE_ROLE_KEY
                 )
                 
                 if not media_records:
-                    logger.error(f"❌ No media record found for {filename} in client {client_id}")
+                    logger.error(f"❌ No media record found for storage path: {storage_path}")
                     raise HTTPException(status_code=404, detail="Media record not found")
                 
                 # Get the most recent media record (in case of duplicates)

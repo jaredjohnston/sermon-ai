@@ -148,72 +148,96 @@ export function Dashboard() {
   // Load transcripts from API on mount
   useEffect(() => {
     loadTranscripts()
+    
+    // Clear any stale polling IDs from previous sessions
+    setPollingTranscriptIds(new Set())
+    console.log('🧹 Cleared stale polling IDs on component mount')
   }, [])
 
-  // Poll for transcription status
+  // Smart polling: handles media_id -> transcript_id resolution  
   useEffect(() => {
     if (pollingTranscriptIds.size === 0) return
 
     const pollInterval = setInterval(async () => {
-      for (const transcriptId of pollingTranscriptIds) {
+      for (const id of pollingTranscriptIds) {
         try {
-          const status = await apiClient.getTranscriptionStatus(transcriptId)
+          // Since IDs are now consistently media_id, always use media lookup
+          const mediaInfo = await apiClient.getTranscriptByMediaId(id)
+          console.log(`📋 Media lookup result for ${id}:`, mediaInfo)
           
-          if (status.status === 'completed') {
-            // Fetch full transcript data
-            const fullTranscript = await apiClient.getFullTranscript(transcriptId)
+          if (mediaInfo.transcript_id) {
+            // Check transcript status using the transcript_id
+            const transcriptStatus = await apiClient.getTranscriptionStatus(mediaInfo.transcript_id)
+            console.log(`✅ Transcript status for ${mediaInfo.transcript_id}:`, transcriptStatus.status)
             
-            // Update content with completed transcript
-            setContents(prev => prev.map(content => 
-              content.id === transcriptId 
-                ? { ...content, transcript: fullTranscript, status: 'completed' }
-                : content
-            ))
-            
-            // Update current content if it's the one we're polling
-            if (currentContent?.id === transcriptId) {
-              setCurrentContent(prev => prev ? { ...prev, transcript: fullTranscript, status: 'completed' } : null)
+            if (transcriptStatus.status === 'completed') {
+              const fullTranscript = await apiClient.getFullTranscript(mediaInfo.transcript_id)
+              
+              setContents(prev => prev.map(content => 
+                content.id === id 
+                  ? { ...content, transcript: fullTranscript, status: 'completed' }
+                  : content
+              ))
+              
+              if (currentContent?.id === id) {
+                setCurrentContent(prev => prev ? { ...prev, transcript: fullTranscript, status: 'completed' } : null)
+              }
+              
+              setPollingTranscriptIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(id)
+                return newSet
+              })
+              
+              toast({
+                title: "Transcription Complete!",
+                description: "Your content is now ready for generation.",
+              })
+            } else if (transcriptStatus.status === 'failed') {
+              setContents(prev => prev.map(content => 
+                content.id === id ? { ...content, status: 'error' } : content
+              ))
+              
+              setPollingTranscriptIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(id)
+                return newSet
+              })
+              
+              toast({
+                title: "Transcription Failed",
+                description: "Please contact support if this persists.",
+                variant: "destructive",
+              })
+            } else {
+              // Still processing, update status
+              setContents(prev => prev.map(content => 
+                content.id === id 
+                  ? { ...content, status: "transcribing" }
+                  : content
+              ))
             }
-            
-            // Stop polling this transcript
-            setPollingTranscriptIds(prev => {
-              const newSet = new Set(prev)
-              newSet.delete(transcriptId)
-              return newSet
-            })
-            
-            // Show completion notification
-            toast({
-              title: "Transcription Complete!",
-              description: "Your content is now ready for generation.",
-            })
-          } else if (status.status === 'failed') {
-            // Handle transcription failure
+          } else {
+            // Transcript not created yet, update status
             setContents(prev => prev.map(content => 
-              content.id === transcriptId 
-                ? { ...content, status: 'error' }
+              content.id === id 
+                ? { ...content, status: "processing" }
                 : content
             ))
-            
-            // Stop polling this transcript
-            setPollingTranscriptIds(prev => {
-              const newSet = new Set(prev)
-              newSet.delete(transcriptId)
-              return newSet
-            })
-            
-            // Show error notification
-            toast({
-              title: "Transcription Failed",
-              description: "Please contact support if this persists.",
-              variant: "destructive",
-            })
           }
         } catch (error) {
-          console.error(`Failed to check transcription status for ${transcriptId}:`, error)
+          console.warn(`📋 Media lookup failed for ${id}:`, error)
+          
+          // Remove from polling if lookup consistently fails
+          console.log(`❌ Media lookup failed for ${id}, removing from polling`)
+          setPollingTranscriptIds(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(id)
+            return newSet
+          })
         }
       }
-    }, 5000) // Poll every 5 seconds
+    }, 3000) // Poll every 3 seconds
 
     return () => clearInterval(pollInterval)
   }, [pollingTranscriptIds, currentContent?.id, apiClient, toast])
@@ -223,8 +247,8 @@ export function Dashboard() {
       setLoading(true)
       setError(null)
       
-      // Fetch transcripts from API
-      const response = await apiClient.listTranscripts(50, 0, 'completed')
+      // Fetch transcripts from API - get all statuses to show processing uploads
+      const response = await apiClient.listTranscripts(50, 0)
       
       // Transform backend data to frontend format
       const contentSources = transformTranscriptListToContentSources(response.transcripts)
@@ -259,20 +283,27 @@ export function Dashboard() {
   }
 
   const handleUploadSuccess = async (data: TranscriptionResponse) => {
-    const transcriptId = data.transcript_id
+    // Use media_id initially, polling will resolve to transcript_id
+    const initialId = data.media_id || data.id
     const newContent: ContentSource = {
-      id: transcriptId,
+      id: initialId,
       filename: data.filename,
       transcript: undefined, // Transcript will be populated when transcription completes
       uploadedAt: data.created_at,
-      status: "transcribing",
+      status: "preparing", // More accurate initial status
     }
 
     setCurrentContent(newContent)
     setContents((prev) => [newContent, ...prev])
 
-    // Start polling for this transcript
-    setPollingTranscriptIds(prev => new Set(prev).add(transcriptId))
+    // Start polling with media_id - will resolve to transcript_id
+    // Validate ID format before adding to polling
+    if (initialId && initialId.length > 10) { // Basic UUID validation
+      console.log(`🔄 Starting polling for ${initialId}`)
+      setPollingTranscriptIds(prev => new Set(prev).add(initialId))
+    } else {
+      console.error(`❌ Invalid ID for polling: ${initialId}`)
+    }
 
     // Immediately go to transcript editor after upload
     setCurrentView("transcript-editor")
@@ -280,7 +311,7 @@ export function Dashboard() {
 
     toast({
       title: "Upload Complete",
-      description: "Now transcribing your audio. This usually takes 30-60 seconds.",
+      description: "Processing your upload...",
     })
   }
 
