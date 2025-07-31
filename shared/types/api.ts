@@ -148,6 +148,7 @@ export interface PrepareUploadResponse {
 export interface TranscriptResponse {
   transcript_id: string;
   media_id: string;
+  filename?: string; // Added to support filename from media table
   status: "pending" | "processing" | "completed" | "failed";
   created_at: string;
   updated_at: string;

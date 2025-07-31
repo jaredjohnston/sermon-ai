@@ -318,7 +318,7 @@ export function Dashboard() {
 
     toast({
       title: "Upload Complete",
-      description: "Processing your upload...",
+      description: "Starting transcription...",
     })
   }
 
@@ -345,6 +345,11 @@ export function Dashboard() {
       setCurrentStage("idle")
       setCurrentContent(null)
       setError(null)
+    } else if (view === "library") {
+      // Reset upload zone when navigating to Create Content
+      if ((window as any).__uploadZoneReset) {
+        (window as any).__uploadZoneReset()
+      }
     }
   }
 

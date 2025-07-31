@@ -43,19 +43,29 @@ export function UploadZone({
   const [error, setError] = useState<string | null>(null)
   const [currentFile, setCurrentFile] = useState<string | null>(null)
 
+  // Reset function for when user navigates to Create Content
+  const resetUploadState = () => {
+    setUploadState("idle")
+    setProgress(0)
+    setCurrentFile(null)
+    onTranscriptionAcknowledged?.()
+  }
+
+  // Expose reset function via callback (we'll need to modify the props later)
+  useEffect(() => {
+    if (uploadState === "complete" && onTranscriptionAcknowledged) {
+      // Store the reset function in a way the parent can access it
+      (window as any).__uploadZoneReset = resetUploadState
+    }
+  }, [uploadState, onTranscriptionAcknowledged])
+
   // Update state when transcription completes
   useEffect(() => {
     if (transcriptionComplete && uploadState === "transcribing") {
       setUploadState("complete")
-      // Reset after showing complete message
-      setTimeout(() => {
-        setUploadState("idle")
-        setProgress(0)
-        setCurrentFile(null)
-        onTranscriptionAcknowledged?.()
-      }, 3000)
+      // Don't auto-reset anymore - let user click Create Content to reset
     }
-  }, [transcriptionComplete, uploadState, onTranscriptionAcknowledged])
+  }, [transcriptionComplete, uploadState])
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -126,18 +136,21 @@ export function UploadZone({
           <div
             {...getRootProps()}
             className={`
-              border-4 border-dashed p-8 text-center cursor-pointer transition-colors
+              ${uploadState === "idle" ? "border-4 border-dashed" : "border-2 border-solid"} p-8 text-center cursor-pointer transition-colors
               ${isDragActive ? "border-blue-600 bg-blue-50" : "border-gray-400 hover:border-blue-600"}
-              ${uploading ? "cursor-not-allowed opacity-50" : ""}
+              ${uploadState === "uploading" || uploadState === "transcribing" ? "cursor-not-allowed opacity-50" : ""}
+              ${uploadState === "complete" ? "cursor-default" : ""}
             `}
             style={isDragActive ? { borderColor: "#0000ee", backgroundColor: "#f0f0ff" } : {}}
           >
             <input {...getInputProps()} />
 
             <div className="flex flex-col items-center space-y-6">
-              {uploading ? (
+              {uploadState === "uploading" ? (
                 <Upload className="h-16 w-16 animate-pulse" style={{ color: "#0000ee" }} />
-              ) : success ? (
+              ) : uploadState === "transcribing" ? (
+                <Upload className="h-16 w-16" style={{ color: "#0000ee" }} />
+              ) : uploadState === "complete" ? (
                 <CheckCircle2 className="h-16 w-16 text-green-600" />
               ) : (
                 <Upload className="h-16 w-16 text-gray-400" />
@@ -145,22 +158,22 @@ export function UploadZone({
 
               <div className="text-center">
                 <h3 className="text-2xl font-black mb-2">
-                  {uploading ? "UPLOADING..." : success ? "UPLOAD COMPLETE!" : "UPLOAD SERMON FILE"}
+                  {uploadState === "uploading" ? "UPLOADING..." : 
+                   uploadState === "transcribing" ? "TRANSCRIBING..." : 
+                   uploadState === "complete" ? "TRANSCRIPTION COMPLETE!" : 
+                   "UPLOAD SERMON FILE"}
                 </h3>
                 <p className="text-gray-600 font-medium">
-                  {uploading
-                    ? "Please wait while we transfer your file"
-                    : success
-                      ? "Upload complete! Now transcribing your audio..."
+                  {uploadState === "uploading"
+                    ? "Hold tight. We're uploading your file - we'll send you an email when it's done."
+                    : uploadState === "transcribing"
+                      ? "Transcribing your sermon. This usually takes a few moments."
+                    : uploadState === "complete"
+                      ? "Go to Create Content to generate content using your templates."
                       : isDragActive
                         ? "Drop your file here"
                         : "Drag and drop your audio, video, PDF, or Word document here, or click to browse"}
                 </p>
-                {success && (
-                  <p className="text-sm text-gray-500 font-medium mt-2">
-                    This usually takes 30-60 seconds
-                  </p>
-                )}
               </div>
 
               {uploadState === "idle" && (
@@ -171,15 +184,22 @@ export function UploadZone({
                 </div>
               )}
 
-              {uploading && (
+              {uploadState === "uploading" && (
                 <div className="w-full max-w-xs space-y-3">
-                  <Progress value={progress} className="w-full h-3" />
+                  <Progress value={progress} className="w-full h-3" style={{ accentColor: "#0000ee" }} />
                   <p className="text-sm font-bold text-center">{Math.round(progress)}% COMPLETE</p>
                 </div>
               )}
 
               {uploadState === "idle" && (
-                <Button className="text-lg px-8 py-3 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200">
+                <Button 
+                  className="text-lg px-8 py-3 rounded-full hover:scale-[1.02] transition-all duration-200 text-white"
+                  style={{ 
+                    backgroundColor: "#0000ee"
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0000cc")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#0000ee")}
+                >
                   <Upload className="h-5 w-5 mr-2" />
                   CHOOSE FILE
                 </Button>
