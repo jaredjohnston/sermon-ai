@@ -172,7 +172,7 @@ export function UploadZone({
                       ? "Go to Create Content to generate content using your templates."
                       : isDragActive
                         ? "Drop your file here"
-                        : "Drag and drop your audio, video, PDF, or Word document here, or click to browse"}
+                        : "Drag and drop your audio, video, or document here, or click to browse"}
                 </p>
               </div>
 
