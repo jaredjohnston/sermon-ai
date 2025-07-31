@@ -47,9 +47,9 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
         return
       }
 
-      // Validate file size (100MB limit)
-      if (file.size > 100 * 1024 * 1024) {
-        setError("File size too large. Please upload a file smaller than 100MB.")
+      // Validate file size (10GB limit)
+      if (file.size > 10 * 1024 * 1024 * 1024) {
+        setError("File size too large. Please upload a file smaller than 10GB.")
         return
       }
 
@@ -60,20 +60,8 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
       onUploadStart()
 
       try {
-        // Simulate progress for better UX
-        const progressInterval = setInterval(() => {
-          setProgress((prev) => {
-            if (prev >= 90) {
-              clearInterval(progressInterval)
-              return 90
-            }
-            return prev + Math.random() * 10
-          })
-        }, 500)
+        const result = await uploadSermon(file, setProgress)
 
-        const result = await uploadSermon(file)
-
-        clearInterval(progressInterval)
         setProgress(100)
         setSuccess(true)
         setUploading(false)
