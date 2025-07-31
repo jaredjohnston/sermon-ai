@@ -62,7 +62,7 @@ export function TemplateEditDialog({ template, open, onOpenChange, onSuccess }: 
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: template.name,
-      status: template.status,
+      status: template.status === "draft" ? "active" : template.status,
       examples: template.example_content || ["", ""],
     },
   })

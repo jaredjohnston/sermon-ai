@@ -9,7 +9,16 @@ from app.config.settings import settings
 logger = logging.getLogger(__name__)
 
 class TUSUploadService:
-    """Service for handling TUS resumable uploads to Supabase Storage"""
+    """
+    INTERNAL SERVICE: TUS resumable uploads to Supabase Storage using SERVICE ROLE KEY
+    
+    WARNING: This service uses the service role key and should ONLY be used for:
+    - Backend-to-Supabase uploads (system operations)
+    - Server-side file processing
+    
+    DO NOT use this for user-initiated uploads from frontend!
+    User uploads should use user JWT tokens directly with Supabase Storage API.
+    """
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -19,7 +28,10 @@ class TUSUploadService:
         return f"{settings.SUPABASE_URL}/storage/v1/upload/resumable"
     
     def _get_tus_headers(self) -> Dict[str, str]:
-        """Get headers required for TUS uploads to Supabase"""
+        """
+        Get headers required for TUS uploads to Supabase using SERVICE ROLE KEY
+        WARNING: Only for internal backend operations!
+        """
         return {
             'Authorization': f'Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}',
             'apikey': settings.SUPABASE_SERVICE_ROLE_KEY

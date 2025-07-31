@@ -1,4 +1,5 @@
 "use client"
+import { useState, useEffect } from "react"
 import {
   Sidebar,
   SidebarContent,
@@ -95,9 +96,53 @@ const bottomNavigation = [
 ]
 
 
+// Utility functions for localStorage operations
+const VIEWED_ITEMS_KEY = 'churchable-viewed-items'
+
+const loadViewedItems = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const stored = localStorage.getItem(VIEWED_ITEMS_KEY)
+    return stored ? new Set(JSON.parse(stored)) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
 export function AppSidebar({ contents, currentView, onViewChange, onContentSelect }: AppSidebarProps) {
-  // Count ready transcripts (completed transcription but no content generated yet)
-  const readyCount = contents.filter(c => c.status === 'completed' && (!c.content || c.content.length === 0)).length
+  const [viewedItems, setViewedItems] = useState<Set<string>>(new Set())
+
+  // Load viewed items on mount and listen for localStorage changes
+  useEffect(() => {
+    setViewedItems(loadViewedItems())
+
+    // Listen for storage changes (when content-library updates viewed items)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === VIEWED_ITEMS_KEY) {
+        setViewedItems(loadViewedItems())
+      }
+    }
+
+    // Listen for custom events from same tab (localStorage events only fire for other tabs)
+    const handleViewedItemsUpdate = () => {
+      setViewedItems(loadViewedItems())
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('viewed-items-updated', handleViewedItemsUpdate)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('viewed-items-updated', handleViewedItemsUpdate)
+    }
+  }, [])
+
+  // Count ready transcripts that haven't been viewed
+  const readyCount = contents.filter(c => 
+    c.status === 'completed' && 
+    (!c.content || c.content.length === 0) &&
+    !viewedItems.has(c.id)
+  ).length
   return (
     <Sidebar collapsible="icon" className="border-r border-warm-gray-200 bg-warm-gray-50">
       <SidebarHeader className="border-b border-warm-gray-200 bg-white">

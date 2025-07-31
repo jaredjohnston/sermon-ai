@@ -2,6 +2,7 @@ from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.services.supabase_service import supabase_service
 from app.models.schemas import User
+from app.config.settings import settings
 import jwt
 from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
@@ -24,7 +25,7 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = None) -> Auth
         )
     
     try:
-        # Verify token with Supabase public key
+        # Verify token with Supabase (signature verification handled by Supabase)
         access_token = credentials.credentials
         payload = jwt.decode(
             access_token,

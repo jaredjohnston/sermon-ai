@@ -55,10 +55,10 @@ export function transformTranscriptToContentSource(
 
   const hasContent = 'has_content' in transcript ? transcript.has_content : !!('content' in transcript && transcript.content)
   
-  // Use media_id (stored as video_id) as the primary identifier
+  // Use media_id as the primary identifier
   // This ensures consistency between upload and list operations
-  const mediaId = 'video_id' in transcript 
-    ? transcript.video_id 
+  const mediaId = 'media_id' in transcript 
+    ? transcript.media_id 
     : ('video' in transcript && transcript.video ? transcript.video.id : transcript.transcript_id)
   
   return {

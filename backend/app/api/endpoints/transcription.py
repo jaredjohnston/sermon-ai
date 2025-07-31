@@ -448,7 +448,7 @@ async def transcribe_upload(
             # STEP 4: Create transcript tracking record 
             transcript = await supabase_service.create_transcript(
                 TranscriptCreate(
-                    video_id=video.id,
+                    media_id=video.id,
                     client_id=client.id,
                     status="pending",  # Initial status - will be updated to processing when transcription starts
                     request_id=None,
@@ -585,7 +585,7 @@ async def get_transcription_status(
         
         return {
             "transcript_id": str(transcript.id),
-            "video_id": str(transcript.video_id),
+            "media_id": str(transcript.media_id),
             "status": transcript.status,
             "created_at": transcript.created_at.isoformat(),
             "updated_at": transcript.updated_at.isoformat(),
@@ -737,7 +737,7 @@ async def list_transcripts(
         for transcript in paginated_transcripts:
             transcripts_data.append({
                 "transcript_id": str(transcript.id),
-                "video_id": str(transcript.video_id),
+                "media_id": str(transcript.media_id),
                 "status": transcript.status,
                 "created_at": transcript.created_at.isoformat(),
                 "updated_at": transcript.updated_at.isoformat(),
@@ -804,7 +804,7 @@ async def get_video_transcript(
         # Format basic transcript info (similar to status endpoint)
         return {
             "transcript_id": str(transcript.id),
-            "video_id": str(transcript.video_id),
+            "media_id": str(transcript.media_id),
             "status": transcript.status,
             "created_at": transcript.created_at.isoformat(),
             "updated_at": transcript.updated_at.isoformat(),
@@ -1144,7 +1144,7 @@ async def start_audio_transcription_background(media_id: str, storage_path: str,
         # Use system method to preserve user_id for audit fields
         transcript = await supabase_service.create_transcript_system(
             TranscriptCreate(
-                video_id=media_id,  # Using media_id for consistency
+                media_id=media_id,  # Using media_id for consistency
                 client_id=client_id,
                 status="processing",
                 metadata={
@@ -1209,7 +1209,7 @@ async def start_video_processing_background(media_id: str, storage_path: str, cl
         # Use system method to preserve user_id for audit fields
         transcript = await supabase_service.create_transcript_system(
             TranscriptCreate(
-                video_id=media_id,  # Using media_id for consistency
+                media_id=media_id,  # Using media_id for consistency
                 client_id=client_id,
                 status="processing",
                 metadata={

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +20,7 @@ import {
   Calendar,
   Edit3,
   Sparkles,
+  PenTool,
 } from "lucide-react"
 import type { ContentSource } from "@/types/api"
 
@@ -73,6 +74,41 @@ export function ContentLibrary({
 }: ContentLibraryProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [viewedItems, setViewedItems] = useState<Set<string>>(new Set())
+
+  // Helper functions for localStorage
+  const getViewedItems = (): Set<string> => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const stored = localStorage.getItem('churchable-viewed-items')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch {
+      return new Set()
+    }
+  }
+
+  const saveViewedItems = (items: Set<string>) => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem('churchable-viewed-items', JSON.stringify(Array.from(items)))
+      // Dispatch custom event to notify sidebar of changes
+      window.dispatchEvent(new CustomEvent('viewed-items-updated'))
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
+
+  const markAsViewed = (contentId: string) => {
+    const newViewedItems = new Set(viewedItems)
+    newViewedItems.add(contentId)
+    setViewedItems(newViewedItems)
+    saveViewedItems(newViewedItems)
+  }
+
+  // Load viewed items on component mount
+  useEffect(() => {
+    setViewedItems(getViewedItems())
+  }, [])
 
   const filteredContents = contents.filter((content) => {
     const matchesSearch = content.filename.toLowerCase().includes(searchTerm.toLowerCase())
@@ -152,10 +188,10 @@ export function ContentLibrary({
             const hasContent = Boolean(content.content)
             const isTranscribing = content.status === 'transcribing'
             const isReady = content.status === 'completed' && !hasContent
-            const isNew = new Date(content.uploadedAt).getTime() > Date.now() - 24 * 60 * 60 * 1000 // Within 24 hours
+            const isNew = (new Date(content.uploadedAt).getTime() > Date.now() - 24 * 60 * 60 * 1000) && !viewedItems.has(content.id) // Within 24 hours and not viewed
 
             return (
-              <Card key={content.id} className={`hover:shadow-md transition-shadow ${isNew ? 'ring-2 ring-primary/50' : ''}`}>
+              <Card key={content.id} className={`hover:shadow-md transition-shadow ${isNew ? 'ring-2 ring-primary/50' : ''}`} onClick={() => markAsViewed(content.id)}>
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center flex-1 min-w-0">
@@ -166,12 +202,12 @@ export function ContentLibrary({
                             <Calendar className="h-3 w-3" />
                             <span>{formatDate(content.uploadedAt)}</span>
                           </div>
-                          <Badge className={statusConfig.color}>
+                          <Badge className={`${statusConfig.color} pointer-events-none`}>
                             <StatusIcon className={`h-3 w-3 mr-1 ${isTranscribing ? 'animate-spin' : ''}`} />
                             {isTranscribing ? 'Transcribing...' : isReady ? 'Ready' : statusConfig.label}
                           </Badge>
                           {isNew && (
-                            <Badge className="bg-blue-100 text-blue-800">
+                            <Badge className="bg-blue-100 text-blue-800 pointer-events-none">
                               <span className="font-semibold">NEW</span>
                             </Badge>
                           )}
@@ -181,33 +217,33 @@ export function ContentLibrary({
 
                     <div className="flex items-center space-x-3">
                       {/* Dynamic action buttons based on sermon state */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onTranscriptEdit(content)}
-                        className="whitespace-nowrap"
-                        disabled={isTranscribing}
-                      >
-                        <Edit3 className="h-4 w-4 mr-2" />
-                        {isTranscribing ? 'Transcribing...' : 'Edit Transcript'}
-                      </Button>
-
                       {hasContent ? (
                         <Button
-                          className="zorp-button whitespace-nowrap"
+                          variant="outline"
                           size="sm"
-                          onClick={() => onContentEdit(content)}
+                          className="whitespace-nowrap"
+                          onClick={() => {
+                            markAsViewed(content.id)
+                            onContentEdit(content)
+                          }}
                         >
-                          <Sparkles className="h-4 w-4 mr-2" />
+                          <Edit3 className="h-4 w-4 mr-2" />
                           Review Content
                         </Button>
                       ) : (
                         <Button 
-                          variant="outline" 
                           size="sm" 
                           disabled={isTranscribing}
-                          className="whitespace-nowrap bg-transparent"
-                          onClick={() => !isTranscribing && onTranscriptEdit(content)}
+                          className="whitespace-nowrap text-white"
+                          style={{ backgroundColor: '#0000ee' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0000cc'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0000ee'}
+                          onClick={() => {
+                            if (!isTranscribing) {
+                              markAsViewed(content.id)
+                              onTranscriptEdit(content)
+                            }
+                          }}
                         >
                           <Sparkles className="h-4 w-4 mr-2" />
                           {isTranscribing ? 'Transcribing...' : 'Generate Content'}
@@ -221,7 +257,10 @@ export function ContentLibrary({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onContentSelect(content)}>
+                          <DropdownMenuItem onClick={() => {
+                            markAsViewed(content.id)
+                            onContentSelect(content)
+                          }}>
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>

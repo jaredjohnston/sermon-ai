@@ -3,7 +3,7 @@ import type {
   PrepareUploadRequest, 
   TranscriptionResponse, 
   ContentResponse,
-  SermonData,
+  ContentSource,
   ContentTemplatePublic
 } from "@/types/api"
 
@@ -24,29 +24,30 @@ export async function uploadSermon(
     const uploadConfig = await apiClient.prepareUpload(prepareRequest)
     console.log('Upload config received:', uploadConfig)
     
-    // Upload file
-    console.log('Uploading to:', uploadConfig.upload_url)
-    const uploadResponse = await apiClient.uploadFile(
-      uploadConfig.upload_url,
-      uploadConfig.upload_fields,
-      file
+    // Upload file using the appropriate method (PUT or TUS)
+    console.log(`Uploading using method: ${uploadConfig.upload_method}`)
+    await apiClient.uploadFile(
+      uploadConfig,
+      file,
+      onProgress,
+      (error) => {
+        console.error('Upload failed:', error)
+        throw error
+      }
     )
     
-    console.log('Upload response status:', uploadResponse.status)
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text()
-      console.error('Upload failed with response:', errorText)
-      throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`)
-    }
+    console.log('Upload completed successfully')
     
     // After successful upload, we need to trigger the transcription webhook
     // The backend should have already started processing after the upload
     // For now, return a response that matches what the dashboard expects
+    // Return media_id initially - the polling system will resolve the transcript_id
     return {
       id: uploadConfig.media_id,
-      transcript_id: uploadConfig.media_id,
+      media_id: uploadConfig.media_id,
+      transcript_id: uploadConfig.media_id, // Will be corrected by polling system
       filename: file.name,
-      status: "processing",
+      status: "upload-complete", // More accurate status
       created_at: new Date().toISOString(),
       estimated_completion: uploadConfig.processing_info.estimated_processing_time,
     }

@@ -130,8 +130,23 @@ export function ContentViewer({ content, onContentGenerated, onBack }: ContentVi
             template.name
           )
           
+          // Transform response to ContentResponse format
+          const contentResponse: ContentResponse = {
+            id: response.id,
+            content: response.content,
+            metadata: {
+              generated_at: new Date().toISOString(),
+              model_used: "gpt-4o",
+              content_type: "template-generated",
+              template_id: template.id,
+              template_name: template.name,
+              generation_cost_cents: response.generation_cost_cents,
+              generation_duration_ms: response.generation_duration_ms,
+            },
+          }
+          
           // Notify parent component
-          onContentGenerated(content.id, response)
+          onContentGenerated(content.id, contentResponse)
           successCount++
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -187,27 +202,21 @@ export function ContentViewer({ content, onContentGenerated, onBack }: ContentVi
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack} className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Library
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{content.filename}</h1>
-            <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {readingTime} min read
-              </span>
-              <span>{words.toLocaleString()} words</span>
-            </div>
+      <div>
+        <Button variant="ghost" onClick={onBack} className="gap-2 mb-4">
+          <ArrowLeft className="h-4 w-4" />
+          Go back
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">{content.filename}</h1>
+          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {readingTime} min read
+            </span>
+            <span>{words.toLocaleString()} words</span>
           </div>
         </div>
-        <Button onClick={handleCopyTranscript} variant="outline" className="gap-2">
-          <Copy className="h-4 w-4" />
-          Copy Transcript
-        </Button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

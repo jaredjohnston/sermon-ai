@@ -120,6 +120,14 @@ export interface PrepareUploadRequest {
   size_bytes: number;
 }
 
+export interface TUSConfig {
+  upload_url: string;
+  headers: Record<string, string>;
+  metadata: Record<string, string>;
+  chunk_size: number;
+  retry_delays?: number[];
+}
+
 export interface PrepareUploadResponse {
   upload_url: string;
   upload_fields: Record<string, string>;
@@ -132,12 +140,14 @@ export interface PrepareUploadResponse {
     estimated_processing_time: string;
     upload_method: string;
   };
+  upload_method: "http_put" | "tus_resumable";
+  tus_config?: TUSConfig;
   expires_in: number;
 }
 
 export interface TranscriptResponse {
   transcript_id: string;
-  video_id: string;
+  media_id: string;
   status: "pending" | "processing" | "completed" | "failed";
   created_at: string;
   updated_at: string;
@@ -226,6 +236,7 @@ export const ENDPOINTS = {
     get: (id: string) => `/transcription/${id}`,
     listVideos: "/transcription/videos",
     getByVideo: (videoId: string) => `/transcription/video/${videoId}`,
+    getTranscriptByMediaId: (mediaId: string) => `/transcription/media/${mediaId}/transcript`,
     webhookUploadComplete: "/transcription/webhooks/upload-complete",
   },
   // Content Templates & Generation

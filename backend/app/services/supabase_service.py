@@ -402,6 +402,22 @@ class SupabaseService:
             return [Media(**item) for item in response.data]
         except Exception as e:
             raise DatabaseError(f"Failed to get media by filename and client: {str(e)}") from e
+
+    async def get_media_by_storage_path(self, storage_path: str, access_token: str) -> List[Media]:
+        """Get media records by storage_path (more reliable than filename matching)"""
+        try:
+            if access_token == settings.SUPABASE_SERVICE_ROLE_KEY:
+                # Use service client for system operations
+                client = await self._get_service_client()
+            else:
+                # Use user-authenticated client
+                client = await self.create_user_authenticated_client(access_token)
+            
+            response = await client.table('media').select("*").eq('storage_path', storage_path).is_('deleted_at', 'null').order('created_at', desc=True).execute()
+            
+            return [Media(**item) for item in response.data]
+        except Exception as e:
+            raise DatabaseError(f"Failed to get media by storage path: {str(e)}") from e
     
     # Backward compatibility method
     async def create_video(self, video: VideoCreate, user_id: UUID) -> Video:
@@ -432,7 +448,7 @@ class SupabaseService:
             client = await self.create_user_authenticated_client(access_token, refresh_token)
             # Audit fields handled automatically by triggers with user context
             response = await client.table('transcripts').insert({
-                "video_id": str(transcript.video_id),
+                "media_id": str(transcript.media_id),
                 "client_id": str(transcript.client_id),
                 "user_id": str(user_id),
                 "status": transcript.status,
@@ -451,7 +467,7 @@ class SupabaseService:
             client = await self._get_service_client()
             # Explicitly set audit fields since we're using service role
             response = await client.table('transcripts').insert({
-                "video_id": str(transcript.video_id),
+                "media_id": str(transcript.media_id),
                 "client_id": str(transcript.client_id),
                 "user_id": str(user_id),
                 "status": transcript.status,
@@ -574,7 +590,7 @@ class SupabaseService:
             client = await self.create_user_authenticated_client(access_token, refresh_token)
             response = await client.table('transcripts')\
                 .select("*")\
-                .eq("video_id", self._uuid_str(video_id))\
+                .eq("media_id", self._uuid_str(video_id))\
                 .is_("deleted_at", "null")\
                 .maybe_single()\
                 .execute()

@@ -177,7 +177,7 @@ class ProcessingStatus(str, Enum):
 
 class TranscriptBase(BaseModel):
     """Base transcript model"""
-    video_id: UUID
+    media_id: UUID
     client_id: UUID
     status: TranscriptStatus = Field(default=TranscriptStatus.processing)
     processing_status: ProcessingStatus = Field(default=ProcessingStatus.pending)

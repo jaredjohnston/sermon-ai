@@ -3,6 +3,7 @@ import {
   ENDPOINTS, 
   PrepareUploadRequest, 
   PrepareUploadResponse,
+  TUSConfig,
   TranscriptResponse,
   FullTranscriptResponse,
   ContentTemplatePublic,
@@ -18,6 +19,7 @@ import {
   TemplateExtractionRequest
 } from '@/types/api';
 import { createClient } from '@/lib/supabase/client';
+import * as tus from 'tus-js-client';
 
 class ApiClient {
   private baseURL: string;
@@ -27,10 +29,35 @@ class ApiClient {
     this.baseURL = API_BASE_URL;
   }
 
-  // Get fresh token from Supabase session
+  // Get fresh token from Supabase session, refresh if needed
   private async getToken(): Promise<string | null> {
     const { data: { session } } = await this.supabase.auth.getSession();
-    return session?.access_token || null;
+    
+    if (!session) {
+      return null;
+    }
+    
+    // Check if token is expiring soon (within 5 minutes)
+    const expiresAt = session.expires_at;
+    const now = Math.floor(Date.now() / 1000);
+    const fiveMinutes = 5 * 60;
+    
+    if (expiresAt && (expiresAt - now) < fiveMinutes) {
+      console.log('Token expiring soon, refreshing...');
+      const { data: refreshed, error } = await this.supabase.auth.refreshSession();
+      
+      if (error) {
+        console.error('Token refresh failed:', error);
+        return session.access_token;
+      }
+      
+      if (refreshed.session) {
+        console.log('Token refreshed successfully');
+        return refreshed.session.access_token;
+      }
+    }
+    
+    return session.access_token;
   }
 
   // HTTP client with automatic auth headers
@@ -141,17 +168,117 @@ class ApiClient {
     });
   }
 
-  async uploadFile(uploadUrl: string, uploadFields: Record<string, string>, file: File): Promise<Response> {
-    // Direct upload to Supabase using provided URL and headers
-    return fetch(uploadUrl, {
-      method: 'PUT',
-      headers: uploadFields,
-      body: file,
-    });
+  async uploadFile(
+    uploadConfig: PrepareUploadResponse, 
+    file: File,
+    onProgress?: (progress: number) => void,
+    onError?: (error: Error) => void
+  ): Promise<void> {
+    if (uploadConfig.upload_method === 'tus_resumable' && uploadConfig.tus_config) {
+      // For large TUS uploads, ensure we have a fresh token before starting
+      const freshToken = await this.getToken();
+      if (!freshToken) {
+        throw new Error('Authentication required for upload');
+      }
+      
+      // Update the auth header with fresh token
+      const updatedConfig = {
+        ...uploadConfig.tus_config,
+        headers: {
+          ...uploadConfig.tus_config.headers,
+          'Authorization': `Bearer ${freshToken}`
+        }
+      };
+      // TUS resumable upload for large files
+      console.log('TUS Config:', {
+        endpoint: updatedConfig.upload_url,
+        headers: updatedConfig.headers,
+        metadata: updatedConfig.metadata,
+        chunk_size: updatedConfig.chunk_size
+      });
+      
+      return new Promise((resolve, reject) => {
+        // Remove tus-resumable header since tus-js-client handles it automatically
+        const clientHeaders = { ...updatedConfig.headers } as Record<string, string>;
+        delete clientHeaders['tus-resumable'];
+        
+        console.log('Starting TUS upload with config:', {
+          endpoint: updatedConfig.upload_url,
+          headers: clientHeaders,
+          metadata: updatedConfig.metadata,
+          chunkSize: updatedConfig.chunk_size,
+          fileSize: file.size
+        });
+
+        const upload = new tus.Upload(file, {
+          endpoint: updatedConfig.upload_url,
+          retryDelays: updatedConfig.retry_delays || [0, 1000, 3000, 5000],
+          chunkSize: updatedConfig.chunk_size || 6 * 1024 * 1024, // 6MB chunks
+          metadata: updatedConfig.metadata || {},
+          headers: clientHeaders,
+          onError: (error) => {
+            console.error('TUS upload failed:', error);
+            console.error('TUS error details:', {
+              message: error.message,
+              stack: error.stack,
+              originalRequest: (error as any).originalRequest ? {
+                status: (error as any).originalRequest.status,
+                responseText: (error as any).originalRequest.responseText,
+                getAllResponseHeaders: (error as any).originalRequest.getAllResponseHeaders?.()
+              } : null
+            });
+            onError?.(error);
+            reject(error);
+          },
+          onProgress: (bytesUploaded, bytesTotal) => {
+            const progress = Math.round((bytesUploaded / bytesTotal) * 100);
+            console.log(`TUS Progress: ${progress}% (${bytesUploaded}/${bytesTotal} bytes)`);
+            onProgress?.(progress);
+          },
+          onSuccess: () => {
+            console.log('TUS upload completed successfully');
+            resolve();
+          }
+        });
+
+        upload.start();
+      });
+    } else {
+      // Standard HTTP PUT upload for small files
+      try {
+        const response = await fetch(uploadConfig.upload_url, {
+          method: 'PUT',
+          headers: uploadConfig.upload_fields,
+          body: file,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        }
+
+        console.log('HTTP PUT upload completed successfully');
+      } catch (error) {
+        console.error('HTTP PUT upload failed:', error);
+        onError?.(error as Error);
+        throw error;
+      }
+    }
   }
 
   async getTranscriptionStatus(transcriptId: string): Promise<TranscriptResponse> {
     return this.request(ENDPOINTS.transcription.status(transcriptId));
+  }
+
+  async getTranscriptByMediaId(mediaId: string): Promise<{
+    media_id: string;
+    transcript_id: string | null;
+    status: string;
+    created_at?: string;
+    updated_at?: string;
+    error_message?: string;
+    message?: string;
+  }> {
+    return this.request(ENDPOINTS.transcription.getTranscriptByMediaId(mediaId));
   }
 
   async getFullTranscript(transcriptId: string): Promise<FullTranscriptResponse> {
