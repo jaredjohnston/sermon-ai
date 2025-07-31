@@ -11,7 +11,8 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { LogOut, User } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { LogOut, User, AlertCircle } from "lucide-react"
 import { AppSidebar } from "./app-sidebar"
 import { ProcessingStatus } from "./processing-status"
 import { GeneratedContent } from "./generated-content"
@@ -125,6 +126,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pollingTranscriptIds, setPollingTranscriptIds] = useState<Set<string>>(new Set())
+  const [transcriptionComplete, setTranscriptionComplete] = useState(false)
   const { toast } = useToast()
   const { user, signOut } = useAuth()
   const apiClient = useApiClient()
@@ -188,6 +190,11 @@ export function Dashboard() {
                 newSet.delete(id)
                 return newSet
               })
+              
+              // Notify UploadZone that transcription is complete
+              if (currentStage === "transcribing" && currentView === "dashboard") {
+                setTranscriptionComplete(true)
+              }
               
               toast({
                 title: "Transcription Complete!",
@@ -278,7 +285,7 @@ export function Dashboard() {
   }
 
   const handleUploadStart = () => {
-    setCurrentStage("uploading")
+    // Don't change stage anymore - UploadZone handles its own states
     setError(null)
   }
 
@@ -305,9 +312,9 @@ export function Dashboard() {
       console.error(`❌ Invalid ID for polling: ${initialId}`)
     }
 
-    // Immediately go to transcript editor after upload
-    setCurrentView("transcript-editor")
-    setCurrentStage("idle")
+    // Stay on dashboard - no redirect
+    // Update stage to transcribing to show status
+    setCurrentStage("transcribing")
 
     toast({
       title: "Upload Complete",
@@ -424,10 +431,18 @@ export function Dashboard() {
       )
     }
 
-    // Show processing status if currently processing
-    if (["uploading", "transcribing", "generating", "error"].includes(currentStage)) {
+    // Don't show ProcessingStatus anymore - let UploadZone handle everything
+    // Only show error state separately if needed
+    if (currentStage === "error" && error && currentView === "dashboard") {
       return (
-        <ProcessingStatus stage={currentStage} filename={currentContent?.filename} error={error || undefined} onRetry={handleRetry} />
+        <div className="w-full max-w-2xl mx-auto">
+          <Alert variant="destructive" className="border-2 border-gray-300 bg-red-50">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="font-medium">
+              {error}
+            </AlertDescription>
+          </Alert>
+        </div>
       )
     }
 
@@ -539,6 +554,8 @@ export function Dashboard() {
             onUploadError={handleUploadError}
             onTranscriptEdit={handleTranscriptEdit}
             onContentEdit={handleContentEdit}
+            transcriptionComplete={transcriptionComplete}
+            onTranscriptionAcknowledged={() => setTranscriptionComplete(false)}
           />
         )
     }

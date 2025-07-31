@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useDropzone } from "react-dropzone"
 import { Upload, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -14,6 +14,8 @@ interface UploadZoneProps {
   onUploadSuccess: (data: TranscriptionResponse) => void
   onUploadStart: () => void
   onUploadError: (error: string) => void
+  transcriptionComplete?: boolean
+  onTranscriptionAcknowledged?: () => void
 }
 
 const SUPPORTED_FORMATS = [
@@ -27,11 +29,33 @@ const SUPPORTED_FORMATS = [
 
 const SUPPORTED_EXTENSIONS = ["mp3", "wav", "mp4", "pdf", "docx"]
 
-export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: UploadZoneProps) {
-  const [uploading, setUploading] = useState(false)
+type UploadState = "idle" | "uploading" | "transcribing" | "complete" | "error"
+
+export function UploadZone({ 
+  onUploadSuccess, 
+  onUploadStart, 
+  onUploadError,
+  transcriptionComplete,
+  onTranscriptionAcknowledged 
+}: UploadZoneProps) {
+  const [uploadState, setUploadState] = useState<UploadState>("idle")
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [currentFile, setCurrentFile] = useState<string | null>(null)
+
+  // Update state when transcription completes
+  useEffect(() => {
+    if (transcriptionComplete && uploadState === "transcribing") {
+      setUploadState("complete")
+      // Reset after showing complete message
+      setTimeout(() => {
+        setUploadState("idle")
+        setProgress(0)
+        setCurrentFile(null)
+        onTranscriptionAcknowledged?.()
+      }, 3000)
+    }
+  }, [transcriptionComplete, uploadState, onTranscriptionAcknowledged])
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -54,23 +78,26 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
       }
 
       setError(null)
-      setSuccess(false)
-      setUploading(true)
+      setUploadState("uploading")
       setProgress(0)
+      setCurrentFile(file.name)
       onUploadStart()
 
       try {
         const result = await uploadSermon(file, setProgress)
 
+        // Upload complete, now transcribing
         setProgress(100)
-        setSuccess(true)
-        setUploading(false)
-
+        setUploadState("transcribing")
+        
+        // Start polling for transcription status
         setTimeout(() => {
           onUploadSuccess(result)
-        }, 1000)
+          // We'll keep showing transcribing state
+          // Dashboard will handle polling and update us when complete
+        }, 500)
       } catch (error) {
-        setUploading(false)
+        setUploadState("error")
         setProgress(0)
         const errorMessage = error instanceof Error ? error.message : "Upload failed"
         setError(errorMessage)
@@ -89,7 +116,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
     },
     multiple: false,
-    disabled: uploading,
+    disabled: uploadState === "uploading" || uploadState === "transcribing",
   })
 
   return (
@@ -136,7 +163,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
                 )}
               </div>
 
-              {!uploading && !success && (
+              {uploadState === "idle" && (
                 <div className="text-center p-4 bg-gray-50 border-2 border-gray-300">
                   <p className="font-bold mb-2">FORMATS:</p>
                   <p className="font-medium mb-2">{SUPPORTED_EXTENSIONS.join(", ").toUpperCase()}</p>
@@ -151,7 +178,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
                 </div>
               )}
 
-              {!uploading && !success && (
+              {uploadState === "idle" && (
                 <Button className="text-lg px-8 py-3 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200">
                   <Upload className="h-5 w-5 mr-2" />
                   CHOOSE FILE
@@ -172,8 +199,9 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
               size="sm"
               onClick={() => {
                 setError(null)
-                setSuccess(false)
+                setUploadState("idle")
                 setProgress(0)
+                setCurrentFile(null)
               }}
             >
               TRY AGAIN

@@ -245,17 +245,32 @@ class ApiClient {
       });
     } else {
       // Standard HTTP PUT upload for small files
+      // Since fetch doesn't provide upload progress, we'll simulate it
       try {
+        // Start progress simulation
+        const startTime = Date.now();
+        const estimatedDuration = Math.min(2000, file.size / 1000); // Estimate based on file size
+        
+        const progressInterval = setInterval(() => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(90, (elapsed / estimatedDuration) * 90);
+          onProgress?.(Math.round(progress));
+        }, 100);
+
         const response = await fetch(uploadConfig.upload_url, {
           method: 'PUT',
           headers: uploadConfig.upload_fields,
           body: file,
         });
 
+        clearInterval(progressInterval);
+
         if (!response.ok) {
           throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
         }
 
+        // Complete the progress
+        onProgress?.(100);
         console.log('HTTP PUT upload completed successfully');
       } catch (error) {
         console.error('HTTP PUT upload failed:', error);

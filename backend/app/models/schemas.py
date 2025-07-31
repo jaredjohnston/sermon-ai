@@ -179,6 +179,7 @@ class TranscriptBase(BaseModel):
     """Base transcript model"""
     media_id: UUID
     client_id: UUID
+    filename: Optional[str] = None  # Added to support filename from media table
     status: TranscriptStatus = Field(default=TranscriptStatus.processing)
     processing_status: ProcessingStatus = Field(default=ProcessingStatus.pending)
     raw_transcript: Optional[Dict[str, Any]] = None
