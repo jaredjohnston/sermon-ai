@@ -450,7 +450,7 @@ export function TranscriptEditor({ content, onContentGenerated, onBack }: Transc
                 )}
 
                 {!transcript.trim() && (
-                  <div className="flex items-center space-x-2 text-gray-600 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+                  <div className="flex items-center space-x-2 text-gray-600 bg-gray-50 px-4 py-2 rounded-lg border border-warm-gray-200">
                     <FileText className="h-4 w-4" />
                     <p className="text-sm font-medium">Add a transcript to enable content generation</p>
                   </div>

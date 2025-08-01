@@ -33,58 +33,66 @@ export function DashboardContent({
 }: DashboardContentProps) {
   return (
     <div className="space-y-12">
-      {/* Upload Section */}
-      <div className="space-y-6">
+      {/* Header */}
+      <div className="mb-8">
         <h2 className="text-3xl font-black text-warm-gray-900">UPLOAD NEW SERMON</h2>
-        <UploadZone 
-          onUploadStart={onUploadStart} 
-          onUploadSuccess={onUploadSuccess} 
-          onUploadError={onUploadError}
-          transcriptionComplete={transcriptionComplete}
-          onTranscriptionAcknowledged={onTranscriptionAcknowledged}
-        />
       </div>
 
-      {/* How It Works */}
-      <div className="space-y-8">
-        <div className="flex items-center">
-          <h2 className="text-3xl font-black text-warm-gray-900">HOW IT WORKS</h2>
-          <div className="ml-4 h-1 flex-1 bg-warm-gray-200"></div>
+      {/* Two-column layout: Upload left, How it Works right */}
+      <div className="flex gap-6">
+        {/* Left Column - Upload Section (takes most of the width) */}
+        <div className="flex-1">
+          <UploadZone 
+            onUploadStart={onUploadStart} 
+            onUploadSuccess={onUploadSuccess} 
+            onUploadError={onUploadError}
+            transcriptionComplete={transcriptionComplete}
+            onTranscriptionAcknowledged={onTranscriptionAcknowledged}
+          />
         </div>
-        
-        <div className="grid gap-8 md:grid-cols-3">
-          {/* Step 1 */}
-          <div className="flex flex-col items-start space-y-4">
-            <div className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center font-black text-xl">
-              1
-            </div>
-            <div>
-              <h3 className="font-black text-xl text-warm-gray-900 mb-3">UPLOAD</h3>
-              <p className="text-warm-gray-600 font-medium">Build your templates then upload your sermon. We support all major file formats.</p>
-            </div>
-          </div>
 
-          {/* Step 2 */}
-          <div className="flex flex-col items-start space-y-4">
-            <div className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center font-black text-xl">
-              2
-            </div>
-            <div>
-              <h3 className="font-black text-xl text-warm-gray-900 mb-3">GENERATE</h3>
-              <p className="text-warm-gray-600 font-medium">Provide additional custom instructions before generating your content.</p>
-            </div>
-          </div>
+        {/* Right Column - How It Works Card (compact width) */}
+        <div className="w-80 hidden lg:block">
+          <Card className="border border-warm-gray-200 rounded-xl shadow-sm">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-bold text-warm-gray-900 mb-4">HOW IT WORKS</h3>
+              
+              <div className="space-y-4">
+                {/* Step 1 */}
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm text-warm-gray-900 mb-1">UPLOAD</h4>
+                    <p className="text-warm-gray-600 text-xs leading-relaxed">Upload your sermon files in any format</p>
+                  </div>
+                </div>
 
-          {/* Step 3 */}
-          <div className="flex flex-col items-start space-y-4">
-            <div className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center font-black text-xl">
-              3
-            </div>
-            <div>
-              <h3 className="font-black text-xl text-warm-gray-900 mb-3">REVIEW</h3>
-              <p className="text-warm-gray-600 font-medium">Make any edits or finishing touches before sharing with your church.</p>
-            </div>
-          </div>
+                {/* Step 2 */}
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm text-warm-gray-900 mb-1">GENERATE</h4>
+                    <p className="text-warm-gray-600 text-xs leading-relaxed">AI creates content from your transcript</p>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flex items-start space-x-3">
+                  <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm text-warm-gray-900 mb-1">REVIEW</h4>
+                    <p className="text-warm-gray-600 text-xs leading-relaxed">Edit and finalize before sharing</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -100,7 +108,7 @@ export function DashboardContent({
           </div>
           <div className="space-y-4">
             {contents.slice(0, 3).map((content) => (
-              <Card key={content.id} className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+              <Card key={content.id} className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center">
@@ -147,7 +155,7 @@ export function DashboardContent({
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {/* Recently Created Card */}
           <Card
-            className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+            className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
             onClick={() => onViewChange("library")}
           >
             <CardContent className="p-0">
@@ -172,7 +180,7 @@ export function DashboardContent({
 
           {/* AI Assistant Card */}
           <Card
-            className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+            className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
             onClick={() => onViewChange("assistant")}
           >
             <CardContent className="p-0">
@@ -197,7 +205,7 @@ export function DashboardContent({
 
           {/* Create Social Clips Card */}
           <Card
-            className="border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 sm:col-span-2 lg:col-span-1 overflow-hidden"
+            className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 sm:col-span-2 lg:col-span-1 overflow-hidden"
             onClick={() => onViewChange("video-clips")}
           >
             <CardContent className="p-0">

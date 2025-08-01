@@ -13,8 +13,16 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { Settings, HelpCircle, User, LogOut, Clock, Zap, Video, Mic, Sparkles, BookOpen } from "lucide-react"
+import { Settings, HelpCircle, User, LogOut, Clock, Zap, Video, Mic, Sparkles, BookOpen, CreditCard, UserPlus, MessageSquare, TrendingUp } from "lucide-react"
 import Image from "next/image"
+import { Button } from "@/components/ui/button"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import type { ContentSource } from "@/types/api"
 
 interface AppSidebarProps {
@@ -22,6 +30,8 @@ interface AppSidebarProps {
   currentView: string
   onViewChange: (view: string) => void
   onContentSelect: (content: ContentSource) => void
+  user?: { email?: string } | null
+  onSignOut: () => void
 }
 
 // Traditional Upload Icon - Simple upward arrow with base line
@@ -109,7 +119,7 @@ const loadViewedItems = (): Set<string> => {
   }
 }
 
-export function AppSidebar({ contents, currentView, onViewChange, onContentSelect }: AppSidebarProps) {
+export function AppSidebar({ contents, currentView, onViewChange, onContentSelect, user, onSignOut }: AppSidebarProps) {
   const [viewedItems, setViewedItems] = useState<Set<string>>(new Set())
 
   // Load viewed items on mount and listen for localStorage changes
@@ -144,19 +154,19 @@ export function AppSidebar({ contents, currentView, onViewChange, onContentSelec
     !viewedItems.has(c.id)
   ).length
   return (
-    <Sidebar collapsible="icon" className="border-r border-warm-gray-200 bg-warm-gray-50">
-      <SidebarHeader className="border-b border-warm-gray-200 bg-white">
-        <div className="flex items-center px-6 py-6">
+    <Sidebar collapsible="icon" className="bg-warm-white">
+      <SidebarHeader className="">
+        <div className="flex items-center px-6 py-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-sm">C</span>
+            <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center">
+              <span className="text-white font-black text-xs">C</span>
             </div>
-            <span className="font-black text-2xl text-warm-gray-900">CHURCHABLE</span>
+            <span className="font-black text-lg text-warm-gray-900">CHURCHABLE</span>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="p-4">
+      <SidebarContent className="px-4 pt-2 pb-4">
         {/* Main Content Creation Section */}
         <SidebarGroup>
           <div className="px-2 py-2 mb-2">
@@ -174,12 +184,10 @@ export function AppSidebar({ contents, currentView, onViewChange, onContentSelec
                       isActive={isActive}
                       onClick={() => onViewChange(item.id)}
                       tooltip={item.description}
-                      className={`font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm ${
-                        isActive ? 'bg-white shadow-sm' : ''
-                      }`}
+                      className="text-sm h-9 px-3 rounded-xl transition-all duration-200 hover:bg-stone-200"
                     >
-                      <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
-                      <span className="flex-1 text-left">{item.title.toUpperCase()}</span>
+                      <Icon className={`h-4 w-4 ${isActive ? 'text-brand-blue' : 'text-gray-500'}`} />
+                      <span className="flex-1 text-left">{item.title}</span>
                       {item.id === 'library' && readyCount > 0 && (
                         <span className="ml-auto bg-primary text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[1.5rem] text-center">
                           {readyCount}
@@ -211,12 +219,10 @@ export function AppSidebar({ contents, currentView, onViewChange, onContentSelec
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => onViewChange(item.id)}
-                      className={`font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-white hover:shadow-sm ${
-                        isActive ? 'bg-white shadow-sm' : ''
-                      }`}
+                      className="text-sm h-9 px-3 rounded-xl transition-all duration-200 hover:bg-stone-200"
                     >
-                      <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
-                      <span>{item.title.toUpperCase()}</span>
+                      <Icon className={`h-4 w-4 ${isActive ? 'text-brand-blue' : 'text-gray-500'}`} />
+                      <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )
@@ -227,7 +233,10 @@ export function AppSidebar({ contents, currentView, onViewChange, onContentSelec
 
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-warm-gray-200 bg-white p-4">
+      {/* Divider above footer */}
+      <SidebarSeparator className="bg-warm-gray-200" />
+
+      <SidebarFooter className="p-4 space-y-2">
         <SidebarMenu className="space-y-1">
           {bottomNavigation.map((item) => {
             const Icon = item.icon
@@ -237,17 +246,88 @@ export function AppSidebar({ contents, currentView, onViewChange, onContentSelec
                 <SidebarMenuButton
                   isActive={isActive}
                   onClick={() => onViewChange(item.id)}
-                  className={`font-semibold text-sm h-10 px-3 rounded-lg transition-all duration-200 hover:bg-warm-gray-50 ${
-                    isActive ? 'bg-warm-gray-50' : ''
-                  }`}
+                  className="text-sm h-9 px-3 rounded-xl transition-all duration-200 hover:bg-stone-200"
                 >
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
-                  <span>{item.title.toUpperCase()}</span>
+                  <Icon className={`h-4 w-4 ${isActive ? 'text-brand-blue' : 'text-gray-500'}`} />
+                  <span>{item.title}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )
           })}
         </SidebarMenu>
+
+        {/* User dropdown */}
+        <div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="w-full justify-start h-9 px-3 rounded-xl hover:bg-stone-200">
+                <Avatar className="h-6 w-6 mr-3">
+                  <AvatarFallback className="text-xs">
+                    {user?.email?.substring(0, 2).toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-gray-700 truncate">{user?.email || 'User'}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64" align="start" side="right">
+              {/* Header with user info */}
+              <div className="flex items-center gap-3 p-3 border-b">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="text-sm">
+                    {user?.email?.substring(0, 1).toUpperCase() || 'C'}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="font-medium text-gray-900">Churchable</span>
+              </div>
+
+              {/* Settings section */}
+              <div className="py-1">
+                <DropdownMenuItem>
+                  <User className="mr-3 h-4 w-4" />
+                  <span>My settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Settings className="mr-3 h-4 w-4" />
+                  <span>Team settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <UserPlus className="mr-3 h-4 w-4" />
+                  <span>Invite members</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <CreditCard className="mr-3 h-4 w-4" />
+                  <span>Plan & Billing</span>
+                </DropdownMenuItem>
+              </div>
+
+              {/* Divider */}
+              <div className="border-b my-1"></div>
+
+              {/* Additional options */}
+              <div className="py-1">
+                <DropdownMenuItem>
+                  <TrendingUp className="mr-3 h-4 w-4" />
+                  <span>Upgrade plan</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <MessageSquare className="mr-3 h-4 w-4" />
+                  <span>Feedback</span>
+                </DropdownMenuItem>
+              </div>
+
+              {/* Divider */}
+              <div className="border-b my-1"></div>
+
+              {/* Sign out */}
+              <div className="py-1">
+                <DropdownMenuItem onClick={onSignOut}>
+                  <LogOut className="mr-3 h-4 w-4" />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </SidebarFooter>
 
       <SidebarRail />
