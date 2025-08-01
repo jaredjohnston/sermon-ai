@@ -5,7 +5,6 @@ import { useDropzone } from "react-dropzone"
 import { Upload, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { uploadSermon } from "@/lib/api"
 import type { TranscriptionResponse } from "@/types/api"
@@ -186,7 +185,12 @@ export function UploadZone({
 
               {uploadState === "uploading" && (
                 <div className="w-full max-w-xs space-y-3">
-                  <Progress value={progress} className="w-full h-3" style={{ accentColor: "#0000ee" }} />
+                  <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-600 transition-all duration-300 ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
                   <p className="text-sm font-bold text-center">{Math.round(progress)}% COMPLETE</p>
                 </div>
               )}
