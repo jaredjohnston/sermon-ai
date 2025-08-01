@@ -571,13 +571,12 @@ class SupabaseService:
             raise DatabaseError(f"Failed to get transcript: {str(e)}") from e
 
     async def get_user_transcripts(self, user_id: UUID, access_token: str, refresh_token: str = None) -> List[Transcript]:
-        """Get all transcripts for a user using user-authenticated client"""
+        """Get all transcripts for a user with media filename using the transcript_with_media view"""
         try:
             client = await self.create_user_authenticated_client(access_token, refresh_token)
-            response = await client.table('transcripts')\
+            response = await client.table('transcript_with_media')\
                 .select("*")\
                 .eq("created_by", str(user_id))\
-                .is_("deleted_at", "null")\
                 .order("created_at", desc=True)\
                 .execute()
             return [Transcript(**transcript) for transcript in response.data]

@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useDropzone } from "react-dropzone"
 import { Upload, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { uploadSermon } from "@/lib/api"
 import type { TranscriptionResponse } from "@/types/api"
@@ -14,6 +13,8 @@ interface UploadZoneProps {
   onUploadSuccess: (data: TranscriptionResponse) => void
   onUploadStart: () => void
   onUploadError: (error: string) => void
+  transcriptionComplete?: boolean
+  onTranscriptionAcknowledged?: () => void
 }
 
 const SUPPORTED_FORMATS = [
@@ -27,11 +28,43 @@ const SUPPORTED_FORMATS = [
 
 const SUPPORTED_EXTENSIONS = ["mp3", "wav", "mp4", "pdf", "docx"]
 
-export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: UploadZoneProps) {
-  const [uploading, setUploading] = useState(false)
+type UploadState = "idle" | "uploading" | "transcribing" | "complete" | "error"
+
+export function UploadZone({ 
+  onUploadSuccess, 
+  onUploadStart, 
+  onUploadError,
+  transcriptionComplete,
+  onTranscriptionAcknowledged 
+}: UploadZoneProps) {
+  const [uploadState, setUploadState] = useState<UploadState>("idle")
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [currentFile, setCurrentFile] = useState<string | null>(null)
+
+  // Reset function for when user navigates to Create Content
+  const resetUploadState = () => {
+    setUploadState("idle")
+    setProgress(0)
+    setCurrentFile(null)
+    onTranscriptionAcknowledged?.()
+  }
+
+  // Expose reset function via callback (we'll need to modify the props later)
+  useEffect(() => {
+    if (uploadState === "complete" && onTranscriptionAcknowledged) {
+      // Store the reset function in a way the parent can access it
+      (window as any).__uploadZoneReset = resetUploadState
+    }
+  }, [uploadState, onTranscriptionAcknowledged])
+
+  // Update state when transcription completes
+  useEffect(() => {
+    if (transcriptionComplete && uploadState === "transcribing") {
+      setUploadState("complete")
+      // Don't auto-reset anymore - let user click Create Content to reset
+    }
+  }, [transcriptionComplete, uploadState])
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -54,23 +87,26 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
       }
 
       setError(null)
-      setSuccess(false)
-      setUploading(true)
+      setUploadState("uploading")
       setProgress(0)
+      setCurrentFile(file.name)
       onUploadStart()
 
       try {
         const result = await uploadSermon(file, setProgress)
 
+        // Upload complete, now transcribing
         setProgress(100)
-        setSuccess(true)
-        setUploading(false)
-
+        setUploadState("transcribing")
+        
+        // Start polling for transcription status
         setTimeout(() => {
           onUploadSuccess(result)
-        }, 1000)
+          // We'll keep showing transcribing state
+          // Dashboard will handle polling and update us when complete
+        }, 500)
       } catch (error) {
-        setUploading(false)
+        setUploadState("error")
         setProgress(0)
         const errorMessage = error instanceof Error ? error.message : "Upload failed"
         setError(errorMessage)
@@ -89,7 +125,7 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
     },
     multiple: false,
-    disabled: uploading,
+    disabled: uploadState === "uploading" || uploadState === "transcribing",
   })
 
   return (
@@ -99,18 +135,21 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
           <div
             {...getRootProps()}
             className={`
-              border-4 border-dashed p-8 text-center cursor-pointer transition-colors
+              ${uploadState === "idle" ? "border-4 border-dashed" : "border-2 border-solid"} p-8 text-center cursor-pointer transition-colors
               ${isDragActive ? "border-blue-600 bg-blue-50" : "border-gray-400 hover:border-blue-600"}
-              ${uploading ? "cursor-not-allowed opacity-50" : ""}
+              ${uploadState === "uploading" || uploadState === "transcribing" ? "cursor-not-allowed opacity-50" : ""}
+              ${uploadState === "complete" ? "cursor-default" : ""}
             `}
             style={isDragActive ? { borderColor: "#0000ee", backgroundColor: "#f0f0ff" } : {}}
           >
             <input {...getInputProps()} />
 
             <div className="flex flex-col items-center space-y-6">
-              {uploading ? (
+              {uploadState === "uploading" ? (
                 <Upload className="h-16 w-16 animate-pulse" style={{ color: "#0000ee" }} />
-              ) : success ? (
+              ) : uploadState === "transcribing" ? (
+                <Upload className="h-16 w-16" style={{ color: "#0000ee" }} />
+              ) : uploadState === "complete" ? (
                 <CheckCircle2 className="h-16 w-16 text-green-600" />
               ) : (
                 <Upload className="h-16 w-16 text-gray-400" />
@@ -118,25 +157,25 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
 
               <div className="text-center">
                 <h3 className="text-2xl font-black mb-2">
-                  {uploading ? "UPLOADING..." : success ? "UPLOAD COMPLETE!" : "UPLOAD SERMON FILE"}
+                  {uploadState === "uploading" ? "UPLOADING..." : 
+                   uploadState === "transcribing" ? "TRANSCRIBING..." : 
+                   uploadState === "complete" ? "TRANSCRIPTION COMPLETE!" : 
+                   "UPLOAD SERMON FILE"}
                 </h3>
                 <p className="text-gray-600 font-medium">
-                  {uploading
-                    ? "Please wait while we transfer your file"
-                    : success
-                      ? "Upload complete! Now transcribing your audio..."
+                  {uploadState === "uploading"
+                    ? "Hold tight. We're uploading your file - we'll send you an email when it's done."
+                    : uploadState === "transcribing"
+                      ? "Transcribing your sermon. This usually takes a few moments."
+                    : uploadState === "complete"
+                      ? "Go to Create Content to generate content using your templates."
                       : isDragActive
                         ? "Drop your file here"
-                        : "Drag and drop your audio, video, PDF, or Word document here, or click to browse"}
+                        : "Drag and drop your audio, video, or document here, or click to browse"}
                 </p>
-                {success && (
-                  <p className="text-sm text-gray-500 font-medium mt-2">
-                    This usually takes 30-60 seconds
-                  </p>
-                )}
               </div>
 
-              {!uploading && !success && (
+              {uploadState === "idle" && (
                 <div className="text-center p-4 bg-gray-50 border-2 border-gray-300">
                   <p className="font-bold mb-2">FORMATS:</p>
                   <p className="font-medium mb-2">{SUPPORTED_EXTENSIONS.join(", ").toUpperCase()}</p>
@@ -144,15 +183,27 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
                 </div>
               )}
 
-              {uploading && (
+              {uploadState === "uploading" && (
                 <div className="w-full max-w-xs space-y-3">
-                  <Progress value={progress} className="w-full h-3" />
+                  <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-600 transition-all duration-300 ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
                   <p className="text-sm font-bold text-center">{Math.round(progress)}% COMPLETE</p>
                 </div>
               )}
 
-              {!uploading && !success && (
-                <Button className="text-lg px-8 py-3 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200">
+              {uploadState === "idle" && (
+                <Button 
+                  className="text-lg px-8 py-3 rounded-full hover:scale-[1.02] transition-all duration-200 text-white"
+                  style={{ 
+                    backgroundColor: "#0000ee"
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0000cc")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#0000ee")}
+                >
                   <Upload className="h-5 w-5 mr-2" />
                   CHOOSE FILE
                 </Button>
@@ -172,8 +223,9 @@ export function UploadZone({ onUploadSuccess, onUploadStart, onUploadError }: Up
               size="sm"
               onClick={() => {
                 setError(null)
-                setSuccess(false)
+                setUploadState("idle")
                 setProgress(0)
+                setCurrentFile(null)
               }}
             >
               TRY AGAIN

@@ -738,6 +738,7 @@ async def list_transcripts(
             transcripts_data.append({
                 "transcript_id": str(transcript.id),
                 "media_id": str(transcript.media_id),
+                "filename": transcript.filename,  # Added filename from view
                 "status": transcript.status,
                 "created_at": transcript.created_at.isoformat(),
                 "updated_at": transcript.updated_at.isoformat(),

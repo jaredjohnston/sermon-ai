@@ -34,12 +34,19 @@ export function transformTranscriptToContentSource(
     }
   }
 
-  // Extract filename from video data if available
+  // Extract filename with priority order: transcript.filename -> video.filename -> transcript ID fallback
   const getFilename = (transcript: TranscriptResponse | FullTranscriptResponse): string => {
+    // Priority 1: filename field from transcript (from listTranscripts API with media JOIN)
+    if ('filename' in transcript && transcript.filename) {
+      return transcript.filename
+    }
+    
+    // Priority 2: filename from video object (from getFullTranscript API)
     if ('video' in transcript && transcript.video) {
       return transcript.video.filename
     }
-    // Fallback to transcript ID if no filename available
+    
+    // Priority 3: Fallback to transcript ID if no filename available
     return `Transcript ${transcript.transcript_id.slice(0, 8)}`
   }
 

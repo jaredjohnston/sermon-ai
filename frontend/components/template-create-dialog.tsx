@@ -142,7 +142,7 @@ export function TemplateCreateDialog({ open, onOpenChange, onSuccess }: Template
           <DialogTitle>Create Content Template</DialogTitle>
           <DialogDescription>
             Create a custom template by providing examples of the content you want to generate.
-            Our AI will learn the pattern and style from your examples. For best results, make your examples similar in structure, length, and formatting.
+            Churchable's AI will learn the formatting, style and tone of voice from your examples.
           </DialogDescription>
         </DialogHeader>
 
@@ -170,7 +170,7 @@ export function TemplateCreateDialog({ open, onOpenChange, onSuccess }: Template
                 <div>
                   <FormLabel>Content Examples</FormLabel>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Provide 2-5 examples of this content type. Make them similar in structure and style - the AI needs to find clear patterns.
+                    Provide 2-5 examples of this content type. For better results, try to use examples which are similar in structure and format.
                   </p>
                 </div>
                 {form.watch("examples").length < 5 && (

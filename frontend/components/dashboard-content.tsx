@@ -15,6 +15,8 @@ interface DashboardContentProps {
   onUploadError: (error: string) => void
   onTranscriptEdit: (content: ContentSource) => void
   onContentEdit: (content: ContentSource) => void
+  transcriptionComplete?: boolean
+  onTranscriptionAcknowledged?: () => void
 }
 
 
@@ -26,13 +28,21 @@ export function DashboardContent({
   onUploadError,
   onTranscriptEdit,
   onContentEdit,
+  transcriptionComplete,
+  onTranscriptionAcknowledged,
 }: DashboardContentProps) {
   return (
     <div className="space-y-12">
       {/* Upload Section */}
       <div className="space-y-6">
         <h2 className="text-3xl font-black text-warm-gray-900">UPLOAD NEW SERMON</h2>
-        <UploadZone onUploadStart={onUploadStart} onUploadSuccess={onUploadSuccess} onUploadError={onUploadError} />
+        <UploadZone 
+          onUploadStart={onUploadStart} 
+          onUploadSuccess={onUploadSuccess} 
+          onUploadError={onUploadError}
+          transcriptionComplete={transcriptionComplete}
+          onTranscriptionAcknowledged={onTranscriptionAcknowledged}
+        />
       </div>
 
       {/* How It Works */}
