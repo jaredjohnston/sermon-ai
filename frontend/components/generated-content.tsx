@@ -199,7 +199,7 @@ export function GeneratedContent({ content, generatedAt, filename, onBack }: Gen
         </Tabs>
       </div>
       ) : (
-        <Card className="bg-gray-50 border-2 border-gray-200">
+        <Card className="bg-gray-50 border-2 border-warm-gray-200">
           <CardContent className="p-12 text-center">
             <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-700 mb-2">No Content Generated</h3>

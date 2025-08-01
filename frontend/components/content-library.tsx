@@ -191,7 +191,7 @@ export function ContentLibrary({
             const isNew = (new Date(content.uploadedAt).getTime() > Date.now() - 24 * 60 * 60 * 1000) && !viewedItems.has(content.id) // Within 24 hours and not viewed
 
             return (
-              <Card key={content.id} className={`hover:shadow-md transition-shadow ${isNew ? 'ring-2 ring-primary/50' : ''}`} onClick={() => markAsViewed(content.id)}>
+              <Card key={content.id} className={`border-0 shadow-lg hover:shadow-xl transition-shadow transform transition-all duration-200 hover:-translate-y-0.5 ${isNew ? 'ring-2 ring-primary/50' : ''}`} onClick={() => markAsViewed(content.id)}>
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center flex-1 min-w-0">
@@ -221,7 +221,7 @@ export function ContentLibrary({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="whitespace-nowrap"
+                          className="whitespace-nowrap rounded-xl"
                           onClick={() => {
                             markAsViewed(content.id)
                             onContentEdit(content)
@@ -234,7 +234,7 @@ export function ContentLibrary({
                         <Button 
                           size="sm" 
                           disabled={isTranscribing}
-                          className="whitespace-nowrap text-white"
+                          className="whitespace-nowrap text-white rounded-xl"
                           style={{ backgroundColor: '#0000ee' }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0000cc'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0000ee'}

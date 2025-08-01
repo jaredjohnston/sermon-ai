@@ -3,16 +3,8 @@
 import { useState, useEffect } from "react"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { useAuth } from "@/components/providers/AuthProvider"
-import { Button } from "@/components/ui/button"
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { LogOut, User, AlertCircle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { AppSidebar } from "./app-sidebar"
 import { ProcessingStatus } from "./processing-status"
 import { GeneratedContent } from "./generated-content"
@@ -573,39 +565,10 @@ export function Dashboard() {
         currentView={currentView}
         onViewChange={handleViewChange}
         onContentSelect={handleContentSelect}
+        user={user}
+        onSignOut={handleSignOut}
       />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-warm-gray-200 bg-white px-4">
-          <SidebarTrigger className="-ml-1" />
-          <div className="ml-auto flex items-center space-x-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>
-                      {user?.email?.substring(0, 2).toUpperCase() || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuItem className="flex-col items-start">
-                  <div className="flex items-center">
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Account</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {user?.email}
-                  </p>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
         <div className="flex flex-1 flex-col bg-warm-white">
           <div className="min-h-[100vh] flex-1 p-4 md:p-8">{renderContent()}</div>
         </div>
