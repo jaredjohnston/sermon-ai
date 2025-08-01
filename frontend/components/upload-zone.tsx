@@ -130,7 +130,7 @@ export function UploadZone({
 
   return (
     <div className="w-full space-y-4">
-      <Card className="border border-warm-gray-200 rounded-2xl shadow-lg">
+      <Card className="border-0 rounded-2xl shadow-lg">
         <CardContent className="p-8">
           <div
             {...getRootProps()}

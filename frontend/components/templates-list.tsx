@@ -141,7 +141,7 @@ export function TemplatesList() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activeTemplates.map((template) => (
-              <Card key={template.id} className="relative">
+              <Card key={template.id} className="relative border-0 shadow-lg hover:shadow-xl transition-shadow transform transition-all duration-200 hover:-translate-y-0.5">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
@@ -195,7 +195,7 @@ export function TemplatesList() {
           <h2 className="text-lg font-semibold text-warm-gray-900">Archived Templates</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-60">
             {archivedTemplates.map((template) => (
-              <Card key={template.id} className="relative">
+              <Card key={template.id} className="relative border-0 shadow-lg hover:shadow-xl transition-shadow transform transition-all duration-200 hover:-translate-y-0.5">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">

@@ -53,7 +53,7 @@ export function DashboardContent({
 
         {/* Right Column - How It Works Card (compact width) */}
         <div className="w-80 hidden lg:block">
-          <Card className="border border-warm-gray-200 rounded-xl shadow-sm">
+          <Card className="border-0 rounded-xl shadow-lg hover:shadow-xl transition-shadow transform transition-all duration-200 hover:-translate-y-0.5">
             <CardContent className="p-6">
               <h3 className="text-lg font-bold text-warm-gray-900 mb-4">HOW IT WORKS</h3>
               
@@ -108,7 +108,7 @@ export function DashboardContent({
           </div>
           <div className="space-y-4">
             {contents.slice(0, 3).map((content) => (
-              <Card key={content.id} className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+              <Card key={content.id} className="border-0 rounded-2xl shadow-lg hover:shadow-xl transition-shadow transform transition-all duration-200 hover:-translate-y-0.5">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center">
@@ -155,7 +155,7 @@ export function DashboardContent({
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {/* Recently Created Card */}
           <Card
-            className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+            className="border-0 rounded-2xl shadow-lg hover:shadow-lg transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
             onClick={() => onViewChange("library")}
           >
             <CardContent className="p-0">
@@ -180,7 +180,7 @@ export function DashboardContent({
 
           {/* AI Assistant Card */}
           <Card
-            className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+            className="border-0 rounded-2xl shadow-lg hover:shadow-lg transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
             onClick={() => onViewChange("assistant")}
           >
             <CardContent className="p-0">
@@ -205,7 +205,7 @@ export function DashboardContent({
 
           {/* Create Social Clips Card */}
           <Card
-            className="border border-warm-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-xl hover:-translate-y-1 sm:col-span-2 lg:col-span-1 overflow-hidden"
+            className="border-0 rounded-2xl shadow-lg hover:shadow-lg transition-shadow cursor-pointer transform transition-all duration-300 hover:shadow-lg hover:-translate-y-1 sm:col-span-2 lg:col-span-1 overflow-hidden"
             onClick={() => onViewChange("video-clips")}
           >
             <CardContent className="p-0">
