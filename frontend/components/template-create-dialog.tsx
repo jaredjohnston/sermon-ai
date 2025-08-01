@@ -179,6 +179,7 @@ export function TemplateCreateDialog({ open, onOpenChange, onSuccess }: Template
                     variant="outline"
                     size="sm"
                     onClick={addExample}
+                    className="rounded-xl"
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add Example
@@ -211,7 +212,7 @@ export function TemplateCreateDialog({ open, onOpenChange, onSuccess }: Template
                             variant="ghost"
                             size="icon"
                             onClick={() => removeExample(index)}
-                            className="mt-6"
+                            className="mt-6 rounded-xl"
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -229,10 +230,11 @@ export function TemplateCreateDialog({ open, onOpenChange, onSuccess }: Template
                 variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
+                className="rounded-xl"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading} className="rounded-xl">
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

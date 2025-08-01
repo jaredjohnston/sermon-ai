@@ -221,7 +221,7 @@ export function ContentLibrary({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="whitespace-nowrap"
+                          className="whitespace-nowrap rounded-xl"
                           onClick={() => {
                             markAsViewed(content.id)
                             onContentEdit(content)
@@ -234,7 +234,7 @@ export function ContentLibrary({
                         <Button 
                           size="sm" 
                           disabled={isTranscribing}
-                          className="whitespace-nowrap text-white"
+                          className="whitespace-nowrap text-white rounded-xl"
                           style={{ backgroundColor: '#0000ee' }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0000cc'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0000ee'}

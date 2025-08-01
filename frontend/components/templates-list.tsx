@@ -115,7 +115,7 @@ export function TemplatesList() {
             Create custom templates by providing examples of your desired content
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+        <Button onClick={() => setCreateDialogOpen(true)} className="gap-2 rounded-xl">
           <Plus className="h-4 w-4" />
           Create Template
         </Button>
@@ -132,7 +132,7 @@ export function TemplatesList() {
               <p className="text-muted-foreground text-center mb-4 max-w-md">
                 Create your first template by providing examples of the content you want to generate
               </p>
-              <Button onClick={() => setCreateDialogOpen(true)} variant="outline" className="gap-2">
+              <Button onClick={() => setCreateDialogOpen(true)} variant="outline" className="gap-2 rounded-xl">
                 <Plus className="h-4 w-4" />
                 Create Your First Template
               </Button>
@@ -159,7 +159,7 @@ export function TemplatesList() {
                       variant="outline"
                       size="sm"
                       onClick={() => setEditingTemplate(template)}
-                      className="flex-1"
+                      className="flex-1 rounded-xl"
                     >
                       <Edit className="h-4 w-4 mr-1" />
                       Edit
@@ -168,7 +168,7 @@ export function TemplatesList() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleArchive(template)}
-                      className="flex-1"
+                      className="flex-1 rounded-xl"
                     >
                       <Archive className="h-4 w-4 mr-1" />
                       Archive
@@ -177,7 +177,7 @@ export function TemplatesList() {
                       variant="outline"
                       size="sm"
                       onClick={() => setDeletingTemplate(template)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive rounded-xl"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -213,7 +213,7 @@ export function TemplatesList() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleArchive(template)}
-                      className="flex-1"
+                      className="flex-1 rounded-xl"
                     >
                       <RotateCcw className="h-4 w-4 mr-1" />
                       Restore
@@ -222,7 +222,7 @@ export function TemplatesList() {
                       variant="outline"
                       size="sm"
                       onClick={() => setDeletingTemplate(template)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive rounded-xl"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

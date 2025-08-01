@@ -60,7 +60,7 @@ export function DashboardContent({
               <div className="space-y-4">
                 {/* Step 1 */}
                 <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                  <div className="w-6 h-6 bg-primary text-white rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0">
                     1
                   </div>
                   <div>
@@ -71,7 +71,7 @@ export function DashboardContent({
 
                 {/* Step 2 */}
                 <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                  <div className="w-6 h-6 bg-primary text-white rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0">
                     2
                   </div>
                   <div>
@@ -82,7 +82,7 @@ export function DashboardContent({
 
                 {/* Step 3 */}
                 <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                  <div className="w-6 h-6 bg-primary text-white rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0">
                     3
                   </div>
                   <div>
@@ -102,7 +102,7 @@ export function DashboardContent({
           <div className="flex items-center">
             <h2 className="text-3xl font-black text-warm-gray-900">RECENTLY CREATED</h2>
             <div className="ml-4 h-1 flex-1 bg-warm-gray-200"></div>
-            <Button className="ml-4 px-4 rounded-full" onClick={() => onViewChange("library")}>
+            <Button className="ml-4 px-4 rounded-xl" onClick={() => onViewChange("library")}>
               VIEW ALL
             </Button>
           </div>
@@ -120,20 +120,15 @@ export function DashboardContent({
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Button variant="outline" size="sm" onClick={() => onViewChange("transcript-editor")}>
-                        <Edit3 className="h-4 w-4 mr-2" />
-                        Edit Transcript
-                      </Button>
-
                       {content.content ? (
-                        <Button className="px-4 rounded-full" size="sm" onClick={() => onContentEdit(content)}>
-                          <Sparkles className="h-4 w-4 mr-2" />
+                        <Button variant="outline" className="px-4 rounded-xl" size="sm" onClick={() => onContentEdit(content)}>
+                          <Edit3 className="h-4 w-4 mr-2" />
                           Review Content
                         </Button>
                       ) : (
-                        <Button variant="outline" size="sm" disabled>
+                        <Button className="px-4 rounded-xl" size="sm" onClick={() => onTranscriptEdit(content)}>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          No Content Yet
+                          Generate Content
                         </Button>
                       )}
                     </div>
@@ -165,7 +160,7 @@ export function DashboardContent({
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">CREATE CONTENT</h3>
                   <p className="text-warm-gray-600 font-medium mb-6">Browse and generate content from your sermons</p>
                   <Button
-                    className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
+                    className="px-8 rounded-xl hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {
                       e.stopPropagation()
                       onViewChange("library")
@@ -190,7 +185,7 @@ export function DashboardContent({
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">AI RESEARCH</h3>
                   <p className="text-warm-gray-600 font-medium mb-6">Ask AI to research a topic and help prepare your sermon</p>
                   <Button
-                    className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
+                    className="px-8 rounded-xl hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {
                       e.stopPropagation()
                       onViewChange("assistant")
@@ -215,7 +210,7 @@ export function DashboardContent({
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">CREATE SOCIAL CLIPS</h3>
                   <p className="text-warm-gray-600 font-medium mb-6">Create engaging social media clips from your sermons</p>
                   <Button
-                    className="px-8 rounded-full hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
+                    className="px-8 rounded-xl hover:brightness-110 hover:scale-[1.02] transition-all duration-200"
                     onClick={(e) => {
                       e.stopPropagation()
                       onViewChange("video-clips")
