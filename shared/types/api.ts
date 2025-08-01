@@ -284,7 +284,7 @@ export interface ApiError {
 }
 
 // Frontend State Types
-export type ProcessingStage = "idle" | "uploading" | "transcribing" | "generating" | "completed" | "error";
+export type ProcessingStage = "idle" | "uploading" | "preparing" | "processing" | "transcribing" | "generating" | "completed" | "error";
 
 export interface ContentSource {
   id: string;

@@ -9,7 +9,15 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { Zap, Video, Sparkles, BookOpen, Settings, HelpCircle } from "lucide-react"
+import { 
+  ArrowUpOnSquareIcon, 
+  SparklesIcon, 
+  DocumentTextIcon, 
+  BoltIcon, 
+  VideoCameraIcon,
+  Cog6ToothIcon,
+  ChatBubbleOvalLeftEllipsisIcon 
+} from "@heroicons/react/24/solid"
 import type { ContentSource } from "@/types/api"
 import type { NavigationItem } from "@/types/navigation"
 import { useViewedItems } from "@/hooks/use-viewed-items"
@@ -25,44 +33,23 @@ interface AppSidebarProps {
   onSignOut: () => void
 }
 
-// Traditional Upload Icon - Simple upward arrow with base line
-function FileUploadIcon({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className={className}>
-      {/* Upload arrow shaft */}
-      <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-
-      {/* Arrow head */}
-      <path d="M7 8l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-
-      {/* Base platform/ground line */}
-      <path
-        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 const mainNavigation: NavigationItem[] = [
   {
     title: "Upload Sermon",
-    icon: FileUploadIcon,
+    icon: ArrowUpOnSquareIcon,
     id: "dashboard",
     description: "Upload sermon files",
   },
   {
     title: "Create Content",
-    icon: Sparkles,
+    icon: SparklesIcon,
     id: "library",
     description: "Your content library",
   },
   {
     title: "Templates",
-    icon: BookOpen,
+    icon: DocumentTextIcon,
     id: "voice-style",
     description: "Content templates",
   },
@@ -71,13 +58,13 @@ const mainNavigation: NavigationItem[] = [
 const comingSoonNavigation: NavigationItem[] = [
   {
     title: "AI Research",
-    icon: Zap,
+    icon: BoltIcon,
     id: "assistant",
     description: "AI research assistant",
   },
   {
     title: "Create Social Clips",
-    icon: Video,
+    icon: VideoCameraIcon,
     id: "video-clips",
     description: "Social media content",
   },
@@ -86,12 +73,12 @@ const comingSoonNavigation: NavigationItem[] = [
 const bottomNavigation: NavigationItem[] = [
   {
     title: "Settings",
-    icon: Settings,
+    icon: Cog6ToothIcon,
     id: "settings",
   },
   {
     title: "Help",
-    icon: HelpCircle,
+    icon: ChatBubbleOvalLeftEllipsisIcon,
     id: "help",
   },
 ]

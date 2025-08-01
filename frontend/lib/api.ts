@@ -47,7 +47,7 @@ export async function uploadSermon(
       media_id: uploadConfig.media_id,
       transcript_id: uploadConfig.media_id, // Will be corrected by polling system
       filename: file.name,
-      status: "upload-complete", // More accurate status
+      status: "processing", // More accurate status
       created_at: new Date().toISOString(),
       estimated_completion: uploadConfig.processing_info.estimated_processing_time,
     }

@@ -42,6 +42,8 @@ export function TranscriptEditor({ content, onContentGenerated, onBack }: Transc
   const transcriptText = content.transcript?.content?.full_transcript || ""
   const [transcript, setTranscript] = useState(transcriptText)
   const [originalTranscript] = useState(transcriptText)
+  const isTranscriptReady = Boolean(content.transcript?.content?.full_transcript)
+  const isProcessing = content.status === 'preparing' || content.status === 'processing' || content.status === 'transcribing'
   const [isEditing, setIsEditing] = useState(false) // Read-only mode since editing is no longer needed
   const [isGenerating, setIsGenerating] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -241,10 +243,22 @@ export function TranscriptEditor({ content, onContentGenerated, onBack }: Transc
               <span className="font-black">{content.filename}</span>
               <div className="flex items-center space-x-4 text-sm text-warm-gray-600 mt-1">
                 <span>Uploaded: {formatDate(content.uploadedAt)}</span>
-                <Badge className="bg-green-100 text-green-800">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Transcribed
-                </Badge>
+                {isTranscriptReady ? (
+                  <Badge className="bg-green-100 text-green-800">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Transcribed
+                  </Badge>
+                ) : isProcessing ? (
+                  <Badge className="bg-orange-100 text-orange-800">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Processing...
+                  </Badge>
+                ) : (
+                  <Badge className="bg-red-100 text-red-800">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Not Ready
+                  </Badge>
+                )}
                 {hasUnsavedChanges && (
                   <Badge className="bg-orange-100 text-orange-800">
                     <Clock className="h-3 w-3 mr-1" />
@@ -288,47 +302,74 @@ export function TranscriptEditor({ content, onContentGenerated, onBack }: Transc
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="space-y-4">
-            {/* Text formatting toolbar */}
-            <div className="flex flex-wrap gap-2 p-2 bg-warm-gray-50 border-2 border-warm-gray-200">
-              <Button variant="ghost" size="sm" onClick={() => formatText("bold")}>
-                <Bold className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => formatText("italic")}>
-                <Italic className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => formatText("insertUnorderedList")}>
-                <List className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => formatText("insertOrderedList")}>
-                <ListOrdered className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => formatText("justifyLeft")}>
-                <AlignLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => formatText("justifyCenter")}>
-                <AlignCenter className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => formatText("justifyRight")}>
-                <AlignRight className="h-4 w-4" />
-              </Button>
+          {!isTranscriptReady ? (
+            <div className="min-h-[400px] flex items-center justify-center">
+              <div className="text-center space-y-4">
+                {isProcessing ? (
+                  <>
+                    <Clock className="h-12 w-12 text-orange-500 mx-auto animate-pulse" />
+                    <h3 className="text-lg font-bold text-warm-gray-900">Transcript Processing</h3>
+                    <p className="text-warm-gray-600">Your sermon is being transcribed. This may take a few minutes...</p>
+                    <Button variant="outline" onClick={onBack} className="mt-4">
+                      ← Back to Library
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+                    <h3 className="text-lg font-bold text-warm-gray-900">Transcript Not Available</h3>
+                    <p className="text-warm-gray-600">The transcript for this sermon is not ready yet.</p>
+                    <Button variant="outline" onClick={onBack} className="mt-4">
+                      ← Back to Library
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Text formatting toolbar */}
+              <div className="flex flex-wrap gap-2 p-2 bg-warm-gray-50 border-2 border-warm-gray-200">
+                <Button variant="ghost" size="sm" onClick={() => formatText("bold")}>
+                  <Bold className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => formatText("italic")}>
+                  <Italic className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => formatText("insertUnorderedList")}>
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => formatText("insertOrderedList")}>
+                  <ListOrdered className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => formatText("justifyLeft")}>
+                  <AlignLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => formatText("justifyCenter")}>
+                  <AlignCenter className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => formatText("justifyRight")}>
+                  <AlignRight className="h-4 w-4" />
+                </Button>
+              </div>
 
-            {/* Editable content area */}
-            <div
-              ref={editorRef}
-              contentEditable
-              className="min-h-[400px] p-6 border-2 border-warm-gray-200 focus:outline-none font-mono text-sm leading-relaxed"
-              style={{ borderColor: editorRef.current === document.activeElement ? "#0000ee" : undefined }}
-              onInput={handleEditorChange}
-              dangerouslySetInnerHTML={{ __html: transcript }}
-            />
-          </div>
+              {/* Editable content area */}
+              <div
+                ref={editorRef}
+                contentEditable
+                className="min-h-[400px] p-6 border-2 border-warm-gray-200 focus:outline-none font-mono text-sm leading-relaxed"
+                style={{ borderColor: editorRef.current === document.activeElement ? "#0000ee" : undefined }}
+                onInput={handleEditorChange}
+                dangerouslySetInnerHTML={{ __html: transcript }}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Content Generation Section */}
-      <Card
+      {/* Content Generation Section - Only show when transcript is ready */}
+      {isTranscriptReady && (
+        <Card
         className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 shadow-lg"
         style={{ borderColor: "#0000ee" }}
       >
@@ -490,6 +531,7 @@ export function TranscriptEditor({ content, onContentGenerated, onBack }: Transc
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

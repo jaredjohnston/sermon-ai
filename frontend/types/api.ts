@@ -5,6 +5,7 @@ export * from '../../shared/types/api'
 export interface TranscriptionResponse {
   id: string
   transcript_id: string  // Add this for backend compatibility
+  media_id?: string  // Optional media_id for TUS uploads
   filename: string
   status: "processing" | "completed" | "failed"
   created_at: string

@@ -118,10 +118,41 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pollingTranscriptIds, setPollingTranscriptIds] = useState<Set<string>>(new Set())
+  const [pollingStartTimes, setPollingStartTimes] = useState<Map<string, number>>(new Map())
+  const [pollingIntervals, setPollingIntervals] = useState<Map<string, number>>(new Map())
   const [transcriptionComplete, setTranscriptionComplete] = useState(false)
   const { toast } = useToast()
   const { user, signOut } = useAuth()
   const apiClient = useApiClient()
+  const isDevelopment = process.env.NODE_ENV === 'development'
+
+  const stopPolling = (id?: string) => {
+    if (id) {
+      // Stop polling for specific ID
+      setPollingTranscriptIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
+      setPollingStartTimes(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(id)
+        return newMap
+      })
+      setPollingIntervals(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(id)
+        return newMap
+      })
+      console.log(`🛑 Manually stopped polling for ${id}`)
+    } else {
+      // Stop all polling
+      setPollingTranscriptIds(new Set())
+      setPollingStartTimes(new Map())
+      setPollingIntervals(new Map())
+      console.log('🛑 Manually stopped all polling')
+    }
+  }
 
   const handleSignOut = async () => {
     try {
@@ -148,21 +179,70 @@ export function Dashboard() {
     console.log('🧹 Cleared stale polling IDs on component mount')
   }, [])
 
-  // Smart polling: handles media_id -> transcript_id resolution  
+  // Smart polling with timeout and exponential backoff
   useEffect(() => {
     if (pollingTranscriptIds.size === 0) return
 
-    const pollInterval = setInterval(async () => {
+    const pollFunction = async () => {
+      const now = Date.now()
+      
       for (const id of pollingTranscriptIds) {
+        const startTime = pollingStartTimes.get(id) || now
+        const elapsedMinutes = (now - startTime) / (1000 * 60)
+        
+        // Developer warnings at specific intervals
+        if (elapsedMinutes >= 3 && elapsedMinutes < 3.1) {
+          console.warn('⚠️  Transcription not started after 3min - check webhook/ngrok status for:', id)
+        }
+        
+        // Stop polling after 5 minutes with clear error message
+        if (elapsedMinutes >= 5) {
+          console.error('❌ Stopped polling after 5min - webhook likely failed for:', id)
+          console.error('💡 Check: 1) ngrok running 2) webhook URL updated 3) backend logs')
+          
+          setPollingTranscriptIds(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(id)
+            return newSet
+          })
+          
+          setPollingStartTimes(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(id)
+            return newMap
+          })
+          
+          setPollingIntervals(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(id)
+            return newMap
+          })
+          
+          setContents(prev => prev.map(content => 
+            content.id === id 
+              ? { ...content, status: 'error' }
+              : content
+          ))
+          
+          toast({
+            title: "Processing Timeout",
+            description: "Processing is taking longer than expected. Please try again.",
+            variant: "destructive",
+          })
+          
+          continue
+        }
+
         try {
-          // Since IDs are now consistently media_id, always use media lookup
           const mediaInfo = await apiClient.getTranscriptByMediaId(id)
-          console.log(`📋 Media lookup result for ${id}:`, mediaInfo)
+          
+          // Implement exponential backoff: 3s → 5s → 10s → 15s (max)
+          const currentInterval = pollingIntervals.get(id) || 3000
+          const nextInterval = Math.min(currentInterval * 1.5, 15000)
+          setPollingIntervals(prev => new Map(prev).set(id, nextInterval))
           
           if (mediaInfo.transcript_id) {
-            // Check transcript status using the transcript_id
             const transcriptStatus = await apiClient.getTranscriptionStatus(mediaInfo.transcript_id)
-            console.log(`✅ Transcript status for ${mediaInfo.transcript_id}:`, transcriptStatus.status)
             
             if (transcriptStatus.status === 'completed') {
               const fullTranscript = await apiClient.getFullTranscript(mediaInfo.transcript_id)
@@ -177,13 +257,25 @@ export function Dashboard() {
                 setCurrentContent(prev => prev ? { ...prev, transcript: fullTranscript, status: 'completed' } : null)
               }
               
+              // Clean up polling state
               setPollingTranscriptIds(prev => {
                 const newSet = new Set(prev)
                 newSet.delete(id)
                 return newSet
               })
               
-              // Notify UploadZone that transcription is complete
+              setPollingStartTimes(prev => {
+                const newMap = new Map(prev)
+                newMap.delete(id)
+                return newMap
+              })
+              
+              setPollingIntervals(prev => {
+                const newMap = new Map(prev)
+                newMap.delete(id)
+                return newMap
+              })
+              
               if (currentStage === "transcribing" && currentView === "dashboard") {
                 setTranscriptionComplete(true)
               }
@@ -197,10 +289,23 @@ export function Dashboard() {
                 content.id === id ? { ...content, status: 'error' } : content
               ))
               
+              // Clean up polling state
               setPollingTranscriptIds(prev => {
                 const newSet = new Set(prev)
                 newSet.delete(id)
                 return newSet
+              })
+              
+              setPollingStartTimes(prev => {
+                const newMap = new Map(prev)
+                newMap.delete(id)
+                return newMap
+              })
+              
+              setPollingIntervals(prev => {
+                const newMap = new Map(prev)
+                newMap.delete(id)
+                return newMap
               })
               
               toast({
@@ -227,19 +332,20 @@ export function Dashboard() {
         } catch (error) {
           console.warn(`📋 Media lookup failed for ${id}:`, error)
           
-          // Remove from polling if lookup consistently fails
-          console.log(`❌ Media lookup failed for ${id}, removing from polling`)
-          setPollingTranscriptIds(prev => {
-            const newSet = new Set(prev)
-            newSet.delete(id)
-            return newSet
-          })
+          // Don't remove immediately on error, let timeout handle it
         }
       }
-    }, 3000) // Poll every 3 seconds
+    }
+
+    // Get current interval for this polling cycle (exponential backoff)
+    const currentInterval = pollingTranscriptIds.size > 0 
+      ? Math.max(...Array.from(pollingTranscriptIds).map(id => pollingIntervals.get(id) || 3000))
+      : 3000
+
+    const pollInterval = setInterval(pollFunction, currentInterval)
 
     return () => clearInterval(pollInterval)
-  }, [pollingTranscriptIds, currentContent?.id, apiClient, toast])
+  }, [pollingTranscriptIds, pollingStartTimes, pollingIntervals, currentContent?.id, apiClient, toast, currentStage, currentView])
 
   const loadTranscripts = async () => {
     try {
@@ -299,7 +405,11 @@ export function Dashboard() {
     // Validate ID format before adding to polling
     if (initialId && initialId.length > 10) { // Basic UUID validation
       console.log(`🔄 Starting polling for ${initialId}`)
+      const now = Date.now()
+      
       setPollingTranscriptIds(prev => new Set(prev).add(initialId))
+      setPollingStartTimes(prev => new Map(prev).set(initialId, now))
+      setPollingIntervals(prev => new Map(prev).set(initialId, 3000)) // Start with 3 second intervals
     } else {
       console.error(`❌ Invalid ID for polling: ${initialId}`)
     }

@@ -43,6 +43,16 @@ const STATUS_CONFIG = {
     color: "bg-blue-100 text-blue-800",
     label: "Uploading",
   },
+  preparing: {
+    icon: Clock,
+    color: "bg-yellow-100 text-yellow-800",
+    label: "Preparing",
+  },
+  processing: {
+    icon: Clock,
+    color: "bg-yellow-100 text-yellow-800",
+    label: "Processing",
+  },
   transcribing: {
     icon: Clock,
     color: "bg-orange-100 text-orange-800",
@@ -183,10 +193,16 @@ export function ContentLibrary({
       ) : (
         <div className="space-y-4">
           {filteredContents.map((content) => {
-            const statusConfig = STATUS_CONFIG[content.status]
+            // Add defensive check for unknown statuses
+            const statusConfig = STATUS_CONFIG[content.status] || {
+              icon: Clock,
+              color: "bg-gray-100 text-gray-800",
+              label: "Unknown",
+            }
             const StatusIcon = statusConfig.icon
             const hasContent = Boolean(content.content)
             const isTranscribing = content.status === 'transcribing'
+            const isProcessing = content.status === 'preparing' || content.status === 'processing'
             const isReady = content.status === 'completed' && !hasContent
             const isNew = (new Date(content.uploadedAt).getTime() > Date.now() - 24 * 60 * 60 * 1000) && !viewedItems.has(content.id) // Within 24 hours and not viewed
 
@@ -233,20 +249,20 @@ export function ContentLibrary({
                       ) : (
                         <Button 
                           size="sm" 
-                          disabled={isTranscribing}
+                          disabled={isTranscribing || isProcessing}
                           className="whitespace-nowrap text-white rounded-xl"
                           style={{ backgroundColor: '#0000ee' }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0000cc'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0000ee'}
                           onClick={() => {
-                            if (!isTranscribing) {
+                            if (!isTranscribing && !isProcessing) {
                               markAsViewed(content.id)
                               onTranscriptEdit(content)
                             }
                           }}
                         >
                           <Sparkles className="h-4 w-4 mr-2" />
-                          {isTranscribing ? 'Transcribing...' : 'Generate Content'}
+                          {isTranscribing ? 'Transcribing...' : isProcessing ? 'Processing...' : 'Generate Content'}
                         </Button>
                       )}
 

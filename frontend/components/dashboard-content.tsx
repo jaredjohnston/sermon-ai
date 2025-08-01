@@ -2,7 +2,8 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, Sparkles, BookOpen, Zap, Video, Edit3 } from "lucide-react"
+import { Upload, Edit3 } from "lucide-react"
+import { SparklesIcon, BoltIcon, VideoCameraIcon } from "@heroicons/react/24/solid"
 import { UploadZone } from "./upload-zone"
 import Image from "next/image"
 import type { ContentSource, TranscriptionResponse } from "@/types/api"
@@ -107,35 +108,44 @@ export function DashboardContent({
             </Button>
           </div>
           <div className="space-y-4">
-            {contents.slice(0, 3).map((content) => (
-              <Card key={content.id} className="border-0 rounded-2xl shadow-lg hover:shadow-xl transition-shadow transform transition-all duration-200 hover:-translate-y-0.5">
-                <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center">
-                      <div>
-                        <p className="font-bold text-lg text-warm-gray-900">{content.filename}</p>
-                        <p className="text-warm-gray-600 font-medium">
-                          {new Date(content.uploadedAt).toLocaleDateString()}
-                        </p>
+            {contents.slice(0, 3).map((content) => {
+              const isProcessing = content.status === 'preparing' || content.status === 'processing' || content.status === 'transcribing'
+              
+              return (
+                <Card key={content.id} className="border-0 rounded-2xl shadow-lg hover:shadow-xl transition-shadow transform transition-all duration-200 hover:-translate-y-0.5">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-center">
+                        <div>
+                          <p className="font-bold text-lg text-warm-gray-900">{content.filename}</p>
+                          <p className="text-warm-gray-600 font-medium">
+                            {new Date(content.uploadedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {content.content ? (
+                          <Button variant="outline" className="px-4 rounded-xl" size="sm" onClick={() => onContentEdit(content)}>
+                            <Edit3 className="h-4 w-4 mr-2" />
+                            Review Content
+                          </Button>
+                        ) : (
+                          <Button 
+                            className="px-4 rounded-xl" 
+                            size="sm" 
+                            disabled={isProcessing}
+                            onClick={() => !isProcessing && onTranscriptEdit(content)}
+                          >
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            {isProcessing ? 'Processing...' : 'Generate Content'}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {content.content ? (
-                        <Button variant="outline" className="px-4 rounded-xl" size="sm" onClick={() => onContentEdit(content)}>
-                          <Edit3 className="h-4 w-4 mr-2" />
-                          Review Content
-                        </Button>
-                      ) : (
-                        <Button className="px-4 rounded-xl" size="sm" onClick={() => onTranscriptEdit(content)}>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Generate Content
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         </div>
       )}
@@ -156,7 +166,7 @@ export function DashboardContent({
             <CardContent className="p-0">
               <div className="flex flex-col h-full">
                 <div className="p-6 pb-8">
-                  <BookOpen className="h-10 w-10 text-primary mb-4" />
+                  <SparklesIcon className="h-10 w-10 text-primary mb-4" />
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">CREATE CONTENT</h3>
                   <p className="text-warm-gray-600 font-medium mb-6">Browse and generate content from your sermons</p>
                   <Button
@@ -181,7 +191,7 @@ export function DashboardContent({
             <CardContent className="p-0">
               <div className="flex flex-col h-full">
                 <div className="p-6 pb-8">
-                  <Zap className="h-10 w-10 text-primary mb-4" />
+                  <BoltIcon className="h-10 w-10 text-primary mb-4" />
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">AI RESEARCH</h3>
                   <p className="text-warm-gray-600 font-medium mb-6">Ask AI to research a topic and help prepare your sermon</p>
                   <Button
@@ -206,7 +216,7 @@ export function DashboardContent({
             <CardContent className="p-0">
               <div className="flex flex-col h-full">
                 <div className="p-6 pb-8">
-                  <Video className="h-10 w-10 text-primary mb-4" />
+                  <VideoCameraIcon className="h-10 w-10 text-primary mb-4" />
                   <h3 className="font-black text-2xl mb-3 text-warm-gray-900">CREATE SOCIAL CLIPS</h3>
                   <p className="text-warm-gray-600 font-medium mb-6">Create engaging social media clips from your sermons</p>
                   <Button

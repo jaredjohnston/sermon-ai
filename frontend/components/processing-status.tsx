@@ -30,6 +30,18 @@ const STAGE_CONFIG = {
     description: "Transferring your sermon file to our servers",
     progress: 25,
   },
+  preparing: {
+    icon: FileText,
+    title: "PREPARING FILE",
+    description: "Processing your uploaded file",
+    progress: 30,
+  },
+  processing: {
+    icon: FileText,
+    title: "PROCESSING FILE",
+    description: "Preparing file for transcription",
+    progress: 40,
+  },
   transcribing: {
     icon: FileText,
     title: "TRANSCRIBING AUDIO",
@@ -69,7 +81,7 @@ export function ProcessingStatus({ stage, progress, filename, error, onCancel, o
     return () => clearTimeout(timer)
   }, [currentProgress])
 
-  const isProcessing = ["uploading", "transcribing", "generating"].includes(stage)
+  const isProcessing = ["uploading", "preparing", "processing", "transcribing", "generating"].includes(stage)
   const showActions = stage === "error" || (isProcessing && onCancel)
 
   return (
