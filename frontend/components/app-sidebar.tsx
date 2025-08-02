@@ -3,11 +3,10 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
   SidebarHeader,
   SidebarRail,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { 
   ArrowUpOnSquareIcon, 
@@ -86,6 +85,8 @@ const bottomNavigation: NavigationItem[] = [
 
 export function AppSidebar({ contents, currentView, onViewChange, onContentSelect, user, onSignOut }: AppSidebarProps) {
   const viewedItems = useViewedItems()
+  const { state } = useSidebar()
+  const isCollapsed = state === "collapsed"
 
   // Count ready transcripts that haven't been viewed
   const readyCount = contents.filter(c => 
@@ -96,63 +97,68 @@ export function AppSidebar({ contents, currentView, onViewChange, onContentSelec
   return (
     <Sidebar collapsible="icon" className="bg-warm-white">
       <SidebarHeader className="">
-        <div className="flex items-center px-6 py-4">
+        <div className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-6'} py-4`}>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center">
+            <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center flex-shrink-0">
               <span className="text-white font-black text-xs">C</span>
             </div>
-            <span className="font-black text-lg text-warm-gray-900">CHURCHABLE</span>
+            {!isCollapsed && (
+              <span className="font-black text-lg text-warm-gray-900">CHURCHABLE</span>
+            )}
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-4 pt-2 pb-4">
+      <SidebarContent className={`${isCollapsed ? 'px-2' : 'px-4'} pt-2 pb-4`}>
         {/* Main Content Creation Section */}
-        <SidebarGroup>
-          <div className="px-2 py-2 mb-2">
+        {!isCollapsed && (
+          <div className="py-2 mb-2">
             <h4 className="text-xs font-black text-warm-gray-600 uppercase tracking-wider">CONTENT</h4>
           </div>
-          <SidebarGroupContent>
-            <NavigationSection
-              items={mainNavigation}
-              currentView={currentView}
-              onViewChange={onViewChange}
-              readyCount={readyCount}
-              readyItemId="library"
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
+        )}
+        <NavigationSection
+          items={mainNavigation}
+          currentView={currentView}
+          onViewChange={onViewChange}
+          readyCount={readyCount}
+          readyItemId="library"
+          isCollapsed={isCollapsed}
+        />
 
         {/* Visual Divider */}
-        <SidebarSeparator className="my-6 bg-warm-gray-200" />
+        {!isCollapsed && (
+          <SidebarSeparator className="my-6 bg-warm-gray-200" />
+        )}
 
         {/* Coming Soon Section */}
-        <SidebarGroup>
-          <div className="px-2 py-2 mb-2">
+        {!isCollapsed && (
+          <div className="py-2 mb-2">
             <h4 className="text-xs font-black text-warm-gray-600 uppercase tracking-wider">COMING SOON</h4>
           </div>
-          <SidebarGroupContent>
-            <NavigationSection
-              items={comingSoonNavigation}
-              currentView={currentView}
-              onViewChange={onViewChange}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
+        )}
+        <NavigationSection
+          items={comingSoonNavigation}
+          currentView={currentView}
+          onViewChange={onViewChange}
+          isCollapsed={isCollapsed}
+        />
 
       </SidebarContent>
 
       {/* Divider above footer */}
-      <SidebarSeparator className="bg-warm-gray-200" />
+      {!isCollapsed && (
+        <SidebarSeparator className="bg-warm-gray-200" />
+      )}
 
-      <SidebarFooter className="p-4 space-y-2">
+      <SidebarFooter className={`${isCollapsed ? 'p-2' : 'p-4'} space-y-2`}>
         <NavigationSection
           items={bottomNavigation}
           currentView={currentView}
           onViewChange={onViewChange}
+          isCollapsed={isCollapsed}
         />
 
-        <UserDropdown user={user} onSignOut={onSignOut} />
+        <UserDropdown user={user} onSignOut={onSignOut} isCollapsed={isCollapsed} />
       </SidebarFooter>
 
       <SidebarRail />

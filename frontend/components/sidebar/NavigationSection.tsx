@@ -11,8 +11,9 @@ export function NavigationSection({
   currentView, 
   onViewChange, 
   readyCount, 
-  readyItemId 
-}: NavigationSectionProps) {
+  readyItemId,
+  isCollapsed 
+}: NavigationSectionProps & { isCollapsed?: boolean }) {
   return (
     <SidebarMenu className="space-y-1">
       {items.map((item) => {
@@ -25,15 +26,19 @@ export function NavigationSection({
             <SidebarMenuButton
               isActive={isActive}
               onClick={() => onViewChange(item.id)}
-              tooltip={item.description}
-              className={SIDEBAR_STYLES.MENU_BUTTON}
+              tooltip={isCollapsed ? item.title : item.description}
+              className={`${SIDEBAR_STYLES.MENU_BUTTON} ${isCollapsed ? 'justify-center px-2' : ''}`}
             >
-              <Icon className={`h-5 w-5 ${isActive ? SIDEBAR_STYLES.ACTIVE_ICON : SIDEBAR_STYLES.INACTIVE_ICON}`} />
-              <span className="flex-1 text-left">{item.title}</span>
-              {showBadge && (
-                <span className="ml-auto bg-primary text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[1.5rem] text-center">
-                  {readyCount}
-                </span>
+              <Icon className={`h-5 w-5 ${isActive ? SIDEBAR_STYLES.ACTIVE_ICON : SIDEBAR_STYLES.INACTIVE_ICON} flex-shrink-0`} />
+              {!isCollapsed && (
+                <>
+                  <span className="flex-1 text-left">{item.title}</span>
+                  {showBadge && (
+                    <span className="ml-auto bg-primary text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[1.5rem] text-center">
+                      {readyCount}
+                    </span>
+                  )}
+                </>
               )}
             </SidebarMenuButton>
           </SidebarMenuItem>

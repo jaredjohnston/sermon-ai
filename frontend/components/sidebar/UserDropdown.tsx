@@ -12,19 +12,22 @@ import { getAvatarFallback } from "@/lib/user-utils"
 interface UserDropdownProps {
   user?: { email?: string } | null
   onSignOut: () => void
+  isCollapsed?: boolean
 }
 
-export function UserDropdown({ user, onSignOut }: UserDropdownProps) {
+export function UserDropdown({ user, onSignOut, isCollapsed }: UserDropdownProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="w-full justify-start h-9 px-3 rounded-xl hover:bg-stone-200">
-          <Avatar className="h-6 w-6 mr-3">
+        <Button variant="ghost" className={`w-full h-9 rounded-xl hover:bg-stone-200 ${isCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+          <Avatar className={`h-6 w-6 ${isCollapsed ? '' : 'mr-3'}`}>
             <AvatarFallback className="text-xs">
-              {getAvatarFallback(user?.email, 2)}
+              {getAvatarFallback(user?.email, isCollapsed ? 1 : 2)}
             </AvatarFallback>
           </Avatar>
-          <span className="text-sm text-gray-700 truncate">{user?.email || 'User'}</span>
+          {!isCollapsed && (
+            <span className="text-sm text-gray-700 truncate">{user?.email || 'User'}</span>
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64" align="start" side="right">
