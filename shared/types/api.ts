@@ -238,6 +238,7 @@ export const ENDPOINTS = {
     listVideos: "/transcription/videos",
     getByVideo: (videoId: string) => `/transcription/video/${videoId}`,
     getTranscriptByMediaId: (mediaId: string) => `/transcription/media/${mediaId}/transcript`,
+    deleteMedia: (mediaId: string) => `/transcription/media/${mediaId}`,
     webhookUploadComplete: "/transcription/webhooks/upload-complete",
   },
   // Content Templates & Generation

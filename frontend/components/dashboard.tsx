@@ -465,17 +465,32 @@ export function Dashboard() {
     }
   }
 
-  const handleContentDelete = (contentId: string) => {
-    setContents((prev) => prev.filter((s) => s.id !== contentId))
-    if (currentContent?.id === contentId) {
-      setCurrentContent(null)
-      setCurrentStage("idle")
-      setCurrentView("dashboard")
+  const handleContentDelete = async (contentId: string) => {
+    try {
+      await apiClient.deleteMedia(contentId)
+      
+      // Remove from local state only after successful API call
+      setContents((prev) => prev.filter((s) => s.id !== contentId))
+      
+      // Handle current content cleanup
+      if (currentContent?.id === contentId) {
+        setCurrentContent(null)
+        setCurrentStage("idle")
+        setCurrentView("dashboard")
+      }
+      
+      toast({
+        title: "File removed",
+        description: "You can recover it within 30 days if needed.",
+      })
+    } catch (error) {
+      console.error('Delete failed:', error)
+      toast({
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : "Unable to delete content. Please try again.",
+        variant: "destructive",
+      })
     }
-    toast({
-      title: "Content Deleted",
-      description: "The content has been removed from your library.",
-    })
   }
 
   const handleTranscriptEdit = (content: ContentSource) => {

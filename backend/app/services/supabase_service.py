@@ -309,6 +309,7 @@ class SupabaseService:
                 .eq("id", client.table('team_members')\
                     .select("team_id")\
                     .eq("user_id", str(user_id)))\
+                .is_("deleted_at", "null")\
                 .execute()
             return [Team(**team) for team in response.data]
         except Exception as e:
@@ -335,16 +336,26 @@ class SupabaseService:
             raise DatabaseError(f"Failed to create media: {str(e)}") from e
     
     async def delete_media(self, media_id: UUID, user_id: UUID) -> bool:
-        """Delete a media record (soft delete)"""
+        """Delete a media record and cascade soft-delete to related transcripts"""
         try:
             client = await self._get_service_client()
-            response = await client.table('media').update({
-                "deleted_at": datetime.now(UTC).isoformat(),
+            deleted_at = datetime.now(UTC).isoformat()
+            
+            # Soft-delete the media record
+            media_response = await client.table('media').update({
+                "deleted_at": deleted_at,
                 "deleted_by": str(user_id),
                 "updated_by": str(user_id)
             }).eq('id', str(media_id)).execute()
             
-            return len(response.data) > 0
+            # Cascade soft-delete to related transcripts
+            transcript_response = await client.table('transcripts').update({
+                "deleted_at": deleted_at,
+                "deleted_by": str(user_id),
+                "updated_by": str(user_id)
+            }).eq('media_id', str(media_id)).execute()
+            
+            return len(media_response.data) > 0
         except Exception as e:
             raise DatabaseError(f"Failed to delete media: {str(e)}") from e
 
@@ -431,6 +442,7 @@ class SupabaseService:
             response = await client.table('media')\
                 .select("*")\
                 .eq("user_id", str(user_id))\
+                .is_("deleted_at", "null")\
                 .execute()
             return [Media(**media) for media in response.data]
         except Exception as e:

@@ -300,6 +300,12 @@ class ApiClient {
     return this.request(ENDPOINTS.transcription.get(transcriptId));
   }
 
+  async deleteMedia(mediaId: string): Promise<void> {
+    return this.request(ENDPOINTS.transcription.deleteMedia(mediaId), {
+      method: 'DELETE',
+    });
+  }
+
   async listTranscripts(limit = 20, offset = 0, status?: string): Promise<{
     transcripts: TranscriptResponse[];
     pagination: { total_count: number; limit: number; offset: number; has_more: boolean };

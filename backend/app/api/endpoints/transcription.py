@@ -1773,3 +1773,65 @@ async def get_audio_cleanup_statistics(current_user: User = Depends(get_current_
             detail=f"Failed to get statistics: {str(e)}"
         )
 
+
+@router.delete("/media/{media_id}")
+async def delete_media(
+    media_id: str,
+    auth: AuthContext = Depends(get_auth_context)
+):
+    """Soft delete a media record and its associated transcript"""
+    try:
+        from uuid import UUID
+        media_uuid = UUID(media_id)
+        
+        # Get user's client for authorization
+        client = await supabase_service.get_user_client(auth.user.id)
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User must belong to a client to delete media"
+            )
+        
+        # Get media record first to verify ownership and existence
+        media = await supabase_service.get_media(media_uuid, auth.access_token)
+        if not media:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Media not found"
+            )
+        
+        # Verify the media belongs to the user's client
+        if media.client_id != client.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this media"
+            )
+        
+        # Perform soft deletion
+        success = await supabase_service.delete_media(media_uuid, auth.user.id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete media"
+            )
+        
+        logger.info(f"✅ Media {media_id} soft deleted by user {auth.user.id}")
+        
+        # Return 204 No Content for successful deletion
+        return {"success": True}
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid media ID format"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error deleting media {media_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete media: {str(e)}"
+        )
+
